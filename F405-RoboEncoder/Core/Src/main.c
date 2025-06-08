@@ -85,6 +85,8 @@ typedef enum {
 static EstadoRobo g_estado_robo = ESTADO_INICIO;
 static int g_potencia_atual = 0;
 static int g_potencia_alvo = POTENCIA_INICIAL;
+static uint8_t g_fim_corrida = 0;
+static uint8_t g_fim_mapeamento = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -174,7 +176,8 @@ int main(void)
 
 	  if (g_estado_robo == ESTADO_MAPEAMENTO || g_estado_robo == ESTADO_CORRIDA) {
 	            gerenciar_eventos_pista();
-	        }
+	  }
+
 
 	  // Máquina de estados principal
 	  	  switch (g_estado_robo) {
@@ -197,6 +200,7 @@ int main(void)
 	  			  HAL_Delay(3000);
 	  			  motor_definir_standby(true);
 	  			  encoder_resetar_posicoes();
+	  			  g_fim_mapeamento = 0;
 	  			  g_potencia_alvo = POTENCIA_CURVA;
 	  			  g_potencia_atual = 0;
 	  			  g_estado_robo = ESTADO_MAPEAMENTO;
@@ -207,12 +211,12 @@ int main(void)
 	  				  g_flag_loop_controle = false;
 	  				  gerenciar_estado_mapeamento();
 	  			  }
-	  			  if (mapa_mapeamento_terminou()) {
-	  				  motor_definir_standby(false);
-	  				  printf("Mapeamento concluido.\r\n");
-	  				  iu_buzina_temporizada(300); // <-- BEEP DE FEEDBACK
-	  				  g_estado_robo = ESTADO_AGUARDANDO_LOG;
-	  			  }
+	  			    if (g_fim_mapeamento >= 2) {
+	  			        motor_definir_standby(false);
+	  			        printf("Mapeamento concluido.\r\n");
+	  			        iu_buzina_temporizada(300);
+	  			        g_estado_robo = ESTADO_AGUARDANDO_LOG;
+	  			    }
 	  			  break;
 
 	  		  case ESTADO_AGUARDANDO_LOG:
@@ -236,6 +240,7 @@ int main(void)
 	  			  mapa_resetar_para_corrida();
 	  			  g_potencia_alvo = POTENCIA_CURVA;
 	  			  g_potencia_atual = 0;
+	  			  g_fim_corrida = 0;
 	  			  g_estado_robo = ESTADO_CORRIDA;
 	  			  break;
 
@@ -824,28 +829,52 @@ void gerenciar_estado_corrida(void) {
     motor_definir_potencia(g_potencia_atual + correcao, g_potencia_atual - correcao);
 }
 
+// SUBSTITUA A FUNÇÃO INTEIRA POR ESTA VERSÃO CORRIGIDA
 void gerenciar_eventos_pista(void) {
-    // Durante a corrida, o principal evento é o fim de um segmento pela distância percorrida.
-    if (g_estado_robo == ESTADO_CORRIDA) {
-        if (mapa_segmento_atual_concluido()) {
-             mapa_avancar_segmento();
-             encoder_resetar_posicoes();
-             iu_buzina_temporizada(20); // Bip curto para indicar avanço de segmento
+    // Esta função agora centraliza a deteção de marcadores para ambos os modos.
 
-             // Verifica se a corrida inteira terminou
-             if (mapa_corrida_terminou()) {
-                 g_estado_robo = ESTADO_FINALIZADO;
-                 return; // Sai da função para evitar processamento desnecessário
-             }
-        }
+    // Chama a função de verificação de marcador uma única vez.
+    TipoMarcador marcador = marcador_lateral_verificar();
+
+    // Se nenhum marcador foi detectado, não há mais nada a fazer nesta função.
+    if (marcador == MARCADOR_NENHUM) {
+        return;
     }
 
-    // Durante o mapeamento, o principal evento é a detecção de um marcador de fita.
+    // --- LÓGICA DE EVENTOS DURANTE O MAPEAMENTO ---
     if (g_estado_robo == ESTADO_MAPEAMENTO) {
-        TipoMarcador marcador = marcador_lateral_verificar();
-        if (marcador != MARCADOR_NENHUM) {
-            iu_buzina_temporizada(50); // Bip um pouco mais longo para marcador
-            mapa_gravar_segmento();
+    	if (marcador == MARCADOR_ESQUERDA || marcador == MARCADOR_DIREITA) {
+    	            iu_buzina_temporizada(50);
+    	            mapa_gravar_segmento(); // Continua gravando o segmento para ambos
+
+    	            // CORREÇÃO: Apenas a marcação DIREITA conta para o fim do mapeamento
+    	            if (marcador == MARCADOR_DIREITA) {
+    	                g_fim_mapeamento++;
+    	            }
+    	        } else if (marcador == MARCADOR_AMBOS) {
+    	            iu_buzina_temporizada(100);
+    	        }
+    }
+    // --- LÓGICA DE EVENTOS DURANTE A CORRIDA ---
+    else if (g_estado_robo == ESTADO_CORRIDA) {
+        // A lógica é similar: Marcadores laterais avançam segmentos, intersecções são ignoradas.
+        if (marcador == MARCADOR_ESQUERDA || marcador == MARCADOR_DIREITA) {
+            iu_buzina_temporizada(100);
+            mapa_avancar_segmento(); // Avança para o próximo segmento do mapa
+
+            // Lógica específica da corrida: contador de fim de prova.
+            if (marcador == MARCADOR_DIREITA) {
+                g_fim_corrida++;
+            }
+
+            // Após uma marcação direita, verifica se a corrida terminou.
+            // A função mapa_corrida_terminou() deve usar o contador g_fim_corrida.
+            if (mapa_corrida_terminou(g_fim_corrida)) {
+                g_estado_robo = ESTADO_FINALIZADO;
+            }
+
+        } else if (marcador == MARCADOR_AMBOS) {
+            iu_buzina_temporizada(100); // Apenas apita na intersecção
         }
     }
 }
