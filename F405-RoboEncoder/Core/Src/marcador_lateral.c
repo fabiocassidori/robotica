@@ -1,59 +1,94 @@
 /*
  * marcador_lateral.c
  *
- * Created on: Jun 5, 2025
  * Author: jlour
- * VERSÃO FINAL COM LÓGICA DE CONFIRMAÇÃO (DEBOUNCE)
+ * VERSÃO FINAL COM MÁQUINA DE ESTADOS ROBUSTA E COOLDOWN
+ * Garante detecção única por evento e correção para cruzamentos.
  */
 
 #include "marcador_lateral.h"
 #include "config_robo.h"
 
-// Variáveis estáticas para a lógica de confirmação
-static int g_contador_confirmacao = 0;
-static bool g_marcador_ja_processado = false;
+// Enum para os estados da máquina de detecção de marcadores
+typedef enum {
+    ESTADO_OCIOSO,       // Aguardando qualquer marcador
+    ESTADO_EM_DETECCAO,  // Atualmente sobre um marcador, acumulando dados
+    ESTADO_DE_ESPERA     // Estado de "cooldown" para evitar detecções múltiplas (bounce)
+} EstadoMarcador;
+
+// Variáveis estáticas para a máquina de estados
+static EstadoMarcador g_estado_marcador = ESTADO_OCIOSO;
+static bool g_viu_direito_neste_evento = false;
+static bool g_viu_esquerdo_neste_evento = false;
 
 static volatile uint16_t* g_adc_buffer = NULL;
 
 void marcador_lateral_inicializar(volatile uint16_t* adc_dma_buffer) {
     g_adc_buffer = adc_dma_buffer;
-    g_contador_confirmacao = 0;
-    g_marcador_ja_processado = false;
+    g_estado_marcador = ESTADO_OCIOSO;
+    g_viu_direito_neste_evento = false;
+    g_viu_esquerdo_neste_evento = false;
 }
 
 TipoMarcador marcador_lateral_verificar(void) {
-    if (!g_adc_buffer) return MARCADOR_NENHUM;
-
-    bool direita_detectado = (g_adc_buffer[0] < LIMIAR_SENSOR_LATERAL);
-    bool esquerda_detectado = (g_adc_buffer[7] < LIMIAR_SENSOR_LATERAL);
-
-    // Se um dos sensores detetar a linha
-    if (direita_detectado || esquerda_detectado) {
-        // Incrementa o contador de confirmação até o limiar
-        if (g_contador_confirmacao < CICLOS_CONFIRMACAO_MARCADOR) {
-            g_contador_confirmacao++;
-        }
-    } else {
-        // Se ambos os sensores estiverem fora da linha, reinicia o processo
-        g_contador_confirmacao = 0;
-        g_marcador_ja_processado = false;
+    if (!g_adc_buffer) {
+        return MARCADOR_NENHUM;
     }
+
+    bool dir_agora = (g_adc_buffer[0] < LIMIAR_SENSOR_LATERAL);
+    bool esq_agora = (g_adc_buffer[7] < LIMIAR_SENSOR_LATERAL);
 
     TipoMarcador marcador_para_retorno = MARCADOR_NENHUM;
 
-    // A deteção é VÁLIDA se o contador atingir o limiar
-    // E o marcador ainda não tiver sido processado nesta passagem
-    if (g_contador_confirmacao >= CICLOS_CONFIRMACAO_MARCADOR && !g_marcador_ja_processado) {
-        g_marcador_ja_processado = true; // Impede leituras repetidas da MESMA marca
+    switch (g_estado_marcador) {
+        case ESTADO_OCIOSO:
+            // Inicia um novo evento se qualquer sensor encontrar a linha
+            if (dir_agora || esq_agora) {
+                g_estado_marcador = ESTADO_EM_DETECCAO;
 
-        // A lógica para determinar o TIPO de marcador permanece a mesma
-        if (esquerda_detectado && direita_detectado) {
-            marcador_para_retorno = MARCADOR_AMBOS;
-        } else if (esquerda_detectado) {
-            marcador_para_retorno = MARCADOR_ESQUERDA;
-        } else if (direita_detectado) {
-            marcador_para_retorno = MARCADOR_DIREITA;
-        }
+                // Registra o(s) sensor(es) visto(s) no início do evento
+                g_viu_direito_neste_evento = dir_agora;
+                g_viu_esquerdo_neste_evento = esq_agora;
+            }
+            break;
+
+        case ESTADO_EM_DETECCAO:
+            // Enquanto o evento durar, acumula as detecções de ambos os sensores
+            if (dir_agora) {
+                g_viu_direito_neste_evento = true;
+            }
+            if (esq_agora) {
+                g_viu_esquerdo_neste_evento = true;
+            }
+
+            // O evento termina APENAS quando o robô está completamente fora da linha
+            if (!dir_agora && !esq_agora) {
+
+                // Processa o resultado do evento que acabou de terminar
+                if (g_viu_esquerdo_neste_evento && g_viu_direito_neste_evento) {
+                    marcador_para_retorno = MARCADOR_AMBOS;
+                } else if (g_viu_esquerdo_neste_evento) {
+                    marcador_para_retorno = MARCADOR_ESQUERDA;
+                } else if (g_viu_direito_neste_evento) {
+                    marcador_para_retorno = MARCADOR_DIREITA;
+                }
+
+                // Reseta as flags para o próximo evento
+                g_viu_direito_neste_evento = false;
+                g_viu_esquerdo_neste_evento = false;
+
+                // Transiciona para o estado de ESPERA para garantir que esta marca não seja lida novamente
+                g_estado_marcador = ESTADO_DE_ESPERA;
+            }
+            break;
+
+        case ESTADO_DE_ESPERA:
+            // O sistema só volta ao estado OCIOSO após um ciclo confirmando que está fora da linha.
+            // Isso previne que um ruído no sensor acione um novo evento imediatamente.
+            if (!dir_agora && !esq_agora) {
+                g_estado_marcador = ESTADO_OCIOSO;
+            }
+            break;
     }
 
     return marcador_para_retorno;
