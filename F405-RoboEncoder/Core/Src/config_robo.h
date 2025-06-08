@@ -16,8 +16,7 @@
 // =============================================================================
 #define NUM_SENSORES_LINHA 6
 #define CICLOS_CALIBRACAO 100       // Quantidade de leituras para calibrar o sensor de linha
-#define INTERVALO_LOOP_CONTROLE_MS 5.0f // Intervalo do loop de controle (TIM6), em milissegundos
-#define INTERVALO_LOOP_CONTROLE_S 0.005f  // Intervalo em segundos
+#define INTERVALO_LOOP_CONTROLE_S 0.001f  // Intervalo em segundos
 
 // --- Física do Robô ---
 #define DIAMETRO_RODA_MM 22.2f
@@ -31,14 +30,14 @@
 // --- Potência e Velocidade ---
 #define POTENCIA_INICIAL 80
 #define POTENCIA_MAX_MOTOR 255
-#define PERIODO_PWM_MOTOR 5599         // Período do registrador do TIM8 para PWM
+#define PERIODO_PWM_MOTOR 3359         // Período do registrador do TIM8 para PWM 50khz
 #define POTENCIA_RETA 245
 #define POTENCIA_CURVA 80
 
 // --- PID do Seguidor de Linha ---
 #define PID_SETPOINT 0
 #define PID_KP 300
-#define PID_KD 900
+#define PID_KD 2800
 #define PID_KI 0
 #define PID_DIVISOR 100
 #define PID_LIMITE_SAIDA 250

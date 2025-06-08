@@ -67,8 +67,6 @@ TIM_HandleTypeDef htim8;
 
 /* USER CODE BEGIN PV */
 
-volatile bool g_flag_loop_controle = false;
-
 typedef enum {
     ESTADO_INICIO,
     ESTADO_CALIBRANDO,
@@ -87,6 +85,11 @@ static int g_potencia_atual = 0;
 static int g_potencia_alvo = POTENCIA_INICIAL;
 static uint8_t g_fim_corrida = 0;
 static uint8_t g_fim_mapeamento = 0;
+
+volatile bool g_flag_loop_1ms = false;
+volatile bool g_flag_loop_10ms = false;
+static volatile int g_contador_loop_lento = 0;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -101,10 +104,8 @@ static void MX_TIM3_Init(void);
 static void MX_TIM4_Init(void);
 /* USER CODE BEGIN PFP */
 
-void gerenciar_estado_mapeamento(void);
-void gerenciar_estado_corrida(void);
-void gerenciar_eventos_pista(void);
-
+void executar_loop_rapido(void);
+void executar_loop_lento(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -171,13 +172,27 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 	  encoder_atualizar_posicoes();
-	  bateria_atualizar();
-	  iu_atualizar();
 
-	  if (g_estado_robo == ESTADO_MAPEAMENTO || g_estado_robo == ESTADO_CORRIDA) {
-	            gerenciar_eventos_pista();
-	  }
+	  // --- LOOP RÁPIDO (1ms) ---
+	      // Responsável pelo controle fino do movimento
+	      if (g_flag_loop_1ms) {
+	          g_flag_loop_1ms = false;
+	          if (g_estado_robo == ESTADO_MAPEAMENTO || g_estado_robo == ESTADO_CORRIDA) {
+	              executar_loop_rapido();
+	          }
+	      }
+	  // --- LOOP LENTO (10ms) ---
+		  // Responsável por eventos, sensores lentos e interface
+		  if (g_flag_loop_10ms) {
+			  g_flag_loop_10ms = false;
 
+			  bateria_atualizar();
+			  iu_atualizar(); // Atualiza buzina/LEDs
+
+			  if (g_estado_robo == ESTADO_MAPEAMENTO || g_estado_robo == ESTADO_CORRIDA) {
+				  executar_loop_lento(); // Verifica marcadores de pista
+			  }
+		  }
 
 	  // Máquina de estados principal
 	  	  switch (g_estado_robo) {
@@ -208,10 +223,6 @@ int main(void)
 	  			  break;
 
 	  		  case ESTADO_MAPEAMENTO:
-	  			  if (g_flag_loop_controle) {
-	  				  g_flag_loop_controle = false;
-	  				  gerenciar_estado_mapeamento();
-	  			  }
 	  			    if (g_fim_mapeamento >= 2) {
 	  			        motor_definir_standby(false);
 	  			        printf("Mapeamento concluido.\r\n");
@@ -246,10 +257,6 @@ int main(void)
 	  			  break;
 
 	  		  case ESTADO_CORRIDA:
-	  			  if (g_flag_loop_controle) {
-	  				  g_flag_loop_controle = false;
-	  				  gerenciar_estado_corrida();
-	  			  }
 	  			  break;
 
 	  		  case ESTADO_FINALIZADO:
@@ -607,7 +614,7 @@ static void MX_TIM6_Init(void)
   htim6.Instance = TIM6;
   htim6.Init.Prescaler = 8399;
   htim6.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim6.Init.Period = 49;
+  htim6.Init.Period = 9;
   htim6.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim6) != HAL_OK)
   {
@@ -648,7 +655,7 @@ static void MX_TIM8_Init(void)
   htim8.Instance = TIM8;
   htim8.Init.Prescaler = 0;
   htim8.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim8.Init.Period = 5599;
+  htim8.Init.Period = PERIODO_PWM_MOTOR;
   htim8.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim8.Init.RepetitionCounter = 0;
   htim8.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
@@ -805,86 +812,82 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-void gerenciar_estado_mapeamento(void) {
-    velocidade_atualizar();
-    int pos_linha = sensor_linha_ler_posicao();
-    int correcao = pid_calcular_correcao(pos_linha);
-    g_potencia_atual = velocidade_rampa_potencia(g_potencia_atual, g_potencia_alvo);
-    motor_definir_potencia(g_potencia_atual + correcao, g_potencia_atual - correcao);
-}
 
-void gerenciar_estado_corrida(void) {
+void executar_loop_rapido(void) {
+    // Contém tudo que é crítico para o controle do movimento
     velocidade_atualizar();
     int pos_linha = sensor_linha_ler_posicao();
     int correcao;
 
-    if (mapa_segmento_atual_e_reta()) {
-        g_potencia_alvo = POTENCIA_RETA;
-        correcao = pid_calcular_correcao_customizada(pos_linha, 30, 800);
-    } else {
-        g_potencia_alvo = POTENCIA_CURVA;
+    if (g_estado_robo == ESTADO_MAPEAMENTO) {
+        g_potencia_alvo = POTENCIA_CURVA; // Durante o mapeamento, a potência é constante
         correcao = pid_calcular_correcao(pos_linha);
+    } else { // ESTADO_CORRIDA
+        if (mapa_segmento_atual_e_reta()) {
+            g_potencia_alvo = POTENCIA_RETA;
+            correcao = pid_calcular_correcao_customizada(pos_linha, 30, 800);
+        } else {
+            g_potencia_alvo = POTENCIA_CURVA;
+            correcao = pid_calcular_correcao(pos_linha);
+        }
     }
 
     g_potencia_atual = velocidade_rampa_potencia(g_potencia_atual, g_potencia_alvo);
     motor_definir_potencia(g_potencia_atual + correcao, g_potencia_atual - correcao);
 }
 
-// SUBSTITUA A FUNÇÃO INTEIRA POR ESTA VERSÃO CORRIGIDA
-void gerenciar_eventos_pista(void) {
-    // Esta função agora centraliza a deteção de marcadores para ambos os modos.
-
-    // Chama a função de verificação de marcador uma única vez.
+// NOVA FUNÇÃO para o loop de 10ms
+void executar_loop_lento(void) {
+    // Contém a verificação de marcadores e outras tarefas não críticas
     TipoMarcador marcador = marcador_lateral_verificar();
-
-    // Se nenhum marcador foi detectado, não há mais nada a fazer nesta função.
     if (marcador == MARCADOR_NENHUM) {
         return;
     }
 
-    // --- LÓGICA DE EVENTOS DURANTE O MAPEAMENTO ---
+    // A lógica de eventos que você já tinha é movida para cá
     if (g_estado_robo == ESTADO_MAPEAMENTO) {
-    	if (marcador == MARCADOR_ESQUERDA || marcador == MARCADOR_DIREITA) {
-    	            iu_buzina_temporizada(50);
-    	            mapa_gravar_segmento(); // Continua gravando o segmento para ambos
-
-    	            // CORREÇÃO: Apenas a marcação DIREITA conta para o fim do mapeamento
-    	            if (marcador == MARCADOR_DIREITA) {
-    	                g_fim_mapeamento++;
-    	            }
-    	        } else if (marcador == MARCADOR_AMBOS) {
-    	            iu_buzina_temporizada(30);
-    	        }
+        if (marcador == MARCADOR_ESQUERDA || marcador == MARCADOR_DIREITA) {
+            iu_buzina_temporizada(50);
+            mapa_gravar_segmento();
+            if (marcador == MARCADOR_DIREITA) {
+                g_fim_mapeamento++;
+            }
+        } else if (marcador == MARCADOR_AMBOS) {
+            iu_buzina_temporizada(100);
+        }
     }
-    // --- LÓGICA DE EVENTOS DURANTE A CORRIDA ---
     else if (g_estado_robo == ESTADO_CORRIDA) {
-        // A lógica é similar: Marcadores laterais avançam segmentos, intersecções são ignoradas.
         if (marcador == MARCADOR_ESQUERDA || marcador == MARCADOR_DIREITA) {
             iu_buzina_temporizada(100);
-            mapa_avancar_segmento(); // Avança para o próximo segmento do mapa
-
-            // Lógica específica da corrida: contador de fim de prova.
+            mapa_avancar_segmento();
             if (marcador == MARCADOR_DIREITA) {
                 g_fim_corrida++;
             }
-
-            // Após uma marcação direita, verifica se a corrida terminou.
-            // A função mapa_corrida_terminou() deve usar o contador g_fim_corrida.
+            // A verificação de fim de corrida é feita aqui mesmo
             if (mapa_corrida_terminou(g_fim_corrida)) {
                 g_estado_robo = ESTADO_FINALIZADO;
             }
-
         } else if (marcador == MARCADOR_AMBOS) {
-            iu_buzina_temporizada(100); // Apenas apita na intersecção
+            iu_buzina_temporizada(100);
         }
     }
 }
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
-  if (htim->Instance == TIM6) {
-    g_flag_loop_controle = true;
-  }
+	if (htim->Instance == TIM6) {
+	    // A interrupção agora acontece a cada 1ms
+
+	    // 1. Aciona o loop rápido toda vez
+	    g_flag_loop_1ms = true;
+
+	    // 2. Usa um contador para acionar o loop lento a cada 10ms
+	    g_contador_loop_lento++;
+	    if (g_contador_loop_lento >= 10) {
+	      g_flag_loop_10ms = true;
+	      g_contador_loop_lento = 0;
+	    }
+	  }
 }
 
 /* USER CODE END 4 */
