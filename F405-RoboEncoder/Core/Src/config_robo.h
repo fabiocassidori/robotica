@@ -50,7 +50,7 @@
 
 // --- Sensores Laterais (Marcadores) ---
 #define LIMIAR_SENSOR_LATERAL 350     // Valor ADC para considerar uma marcação detectada
-#define CICLOS_CONFIRMACAO_MARCADOR 5
+
 // =============================================================================
 // CONFIGURAÇÕES DO MAPEAMENTO
 // =============================================================================
