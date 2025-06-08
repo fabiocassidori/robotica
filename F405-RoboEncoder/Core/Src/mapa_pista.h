@@ -18,6 +18,7 @@ void mapa_resetar_para_corrida(void);
 int mapa_obter_potencia_alvo(void);
 bool mapa_segmento_atual_concluido(void);
 bool mapa_segmento_atual_e_reta(void);
+bool mapa_segmento_atual_e_reta_longa(void);
 void mapa_avancar_segmento(void);
 void mapa_logar_dados_swo(void);
 

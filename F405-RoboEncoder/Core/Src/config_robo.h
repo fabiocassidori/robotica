@@ -54,6 +54,10 @@
 // CONFIGURAÇÕES DO MAPEAMENTO
 // =============================================================================
 #define TAMANHO_MAPA 50
+// ADICIONE A NOVA LINHA ABAIXO:
+// Distância (em unidades de mapa) a partir da qual uma reta é considerada "longa"
+// o suficiente para aplicar potência máxima. (Valor ~50cm)
+#define LIMIAR_DISTANCIA_RETA_LONGA 288
 #define LIMIAR_CURVA_RETA 300 // Raio calculado a partir do qual se considera uma reta
 
 // =============================================================================

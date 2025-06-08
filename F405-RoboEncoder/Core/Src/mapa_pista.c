@@ -87,6 +87,27 @@ void mapa_avancar_segmento(void) {
 	       g_ponteiro_segmento++;
 	   }
 }
+
+/**
+ * @brief Verifica se o segmento atual é uma reta E se seu comprimento é
+ * superior ao limiar definido para retas longas.
+ * @return true se for uma reta longa, false caso contrário.
+ */
+bool mapa_segmento_atual_e_reta_longa(void) {
+    // Garante que não estamos tentando ler fora dos dados do mapa
+    if (g_ponteiro_segmento >= g_segmentos_gravados) {
+        return false;
+    }
+
+    // 1. Verifica se o segmento é classificado como uma reta
+    bool e_reta = (g_mapa_potencia[g_ponteiro_segmento] == POTENCIA_RETA);
+    if (!e_reta) {
+        return false; // Se não for reta, não pode ser uma reta longa.
+    }
+
+    // 2. Se for uma reta, verifica se o comprimento gravado excede o limiar
+    return (g_mapa_dist_media[g_ponteiro_segmento] > LIMIAR_DISTANCIA_RETA_LONGA);
+}
 // ... (função mapa_logar_dados_swo permanece a mesma) ...
 void mapa_logar_dados_swo(void) {
     printf("Iniciando impressao dos dados via SWO...\r\n");

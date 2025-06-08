@@ -823,7 +823,7 @@ void executar_loop_rapido(void) {
         g_potencia_alvo = POTENCIA_CURVA; // Durante o mapeamento, a potência é constante
         correcao = pid_calcular_correcao(pos_linha);
     } else { // ESTADO_CORRIDA
-        if (mapa_segmento_atual_e_reta()) {
+        if (mapa_segmento_atual_e_reta_longa()) {
             g_potencia_alvo = POTENCIA_RETA;
             correcao = pid_calcular_correcao_customizada(pos_linha, 30, 800);
         } else {
