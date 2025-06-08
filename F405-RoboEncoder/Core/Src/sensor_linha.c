@@ -8,6 +8,7 @@
 #include "sensor_linha.h"
 #include "config_robo.h"
 #include "interface_usuario.h"
+#include "marcador_lateral.h"
 #include <stdio.h>
 
 static ADC_HandleTypeDef *g_hadc = NULL;
@@ -46,6 +47,7 @@ void sensor_linha_calibrar(void) {
             if (valor_atual < g_valores_minimos[j]) g_valores_minimos[j] = valor_atual;
             if (valor_atual > g_valores_maximos[j]) g_valores_maximos[j] = valor_atual;
         }
+        marcador_lateral_calibrar_ciclo();
         HAL_Delay(30);
     }
     printf("Calibracao finalizada.\r\n");

@@ -49,7 +49,7 @@
 #define ADC_VALOR_MAXIMO 1023.0f
 
 // --- Sensores Laterais (Marcadores) ---
-#define LIMIAR_SENSOR_LATERAL 350     // Valor ADC para considerar uma marcação detectada
+#define LIMIAR_SENSOR_LATERAL 600    // Valor ADC para considerar uma marcação detectada
 
 // =============================================================================
 // CONFIGURAÇÕES DO MAPEAMENTO

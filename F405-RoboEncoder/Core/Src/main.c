@@ -190,6 +190,7 @@ int main(void)
 
 	  		  case ESTADO_CALIBRANDO:
 	  			  sensor_linha_calibrar(); // Esta função já tem seus próprios bipes
+	  			  marcador_lateral_finalizar_calibracao();
 	  			  g_estado_robo = ESTADO_AGUARDANDO_MAPEAMENTO;
 	  			  break;
 
@@ -852,7 +853,7 @@ void gerenciar_eventos_pista(void) {
     	                g_fim_mapeamento++;
     	            }
     	        } else if (marcador == MARCADOR_AMBOS) {
-    	            iu_buzina_temporizada(100);
+    	            iu_buzina_temporizada(30);
     	        }
     }
     // --- LÓGICA DE EVENTOS DURANTE A CORRIDA ---
