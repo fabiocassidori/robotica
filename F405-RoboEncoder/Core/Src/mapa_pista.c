@@ -83,9 +83,9 @@ bool mapa_segmento_atual_e_reta(void) {
 }
 
 void mapa_avancar_segmento(void) {
-     if (g_ponteiro_segmento < g_segmentos_gravados) {
-        g_ponteiro_segmento++;
-    }
+	if (g_ponteiro_segmento < g_segmentos_gravados - 1) {
+	       g_ponteiro_segmento++;
+	   }
 }
 // ... (função mapa_logar_dados_swo permanece a mesma) ...
 void mapa_logar_dados_swo(void) {
