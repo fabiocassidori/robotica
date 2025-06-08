@@ -23,7 +23,6 @@ static int g_mapa_potencia[TAMANHO_MAPA];
 
 static int g_segmentos_gravados = 0;
 static int g_ponteiro_segmento = 0;
-static int g_contador_finalizacao_mapa = 0;
 
 
 // ... (funções mapa_inicializar, mapa_gravar_segmento, mapa_mapeamento_terminou, mapa_corrida_terminou, mapa_resetar_para_corrida permanecem as mesmas) ...
@@ -32,12 +31,11 @@ void mapa_inicializar(void) {
         g_mapa_dist_esq[i] = 0; g_mapa_dist_dir[i] = 0; g_mapa_dist_media[i] = 0;
         g_mapa_raio[i] = 0; g_mapa_potencia[i] = 0;
     }
-    g_segmentos_gravados = 0; g_ponteiro_segmento = 0; g_contador_finalizacao_mapa = 0;
+    g_segmentos_gravados = 0; g_ponteiro_segmento = 0;
 }
 
 void mapa_gravar_segmento(void) {
     if (g_segmentos_gravados >= TAMANHO_MAPA) { printf("ERRO: Mapa cheio!\r\n"); return; }
-    g_contador_finalizacao_mapa++;
     g_mapa_dist_esq[g_segmentos_gravados] = (int)(CONSTANTE_DISTANCIA * encoder_obter_posicao_esquerda());
     g_mapa_dist_dir[g_segmentos_gravados] = (int)(CONSTANTE_DISTANCIA * encoder_obter_posicao_direita());
     g_mapa_dist_media[g_segmentos_gravados] = (g_mapa_dist_esq[g_segmentos_gravados] + g_mapa_dist_dir[g_segmentos_gravados]) / 2;
@@ -51,8 +49,12 @@ void mapa_gravar_segmento(void) {
     g_segmentos_gravados++;
 }
 
-bool mapa_mapeamento_terminou(void) { return (g_contador_finalizacao_mapa >= 2); }
-bool mapa_corrida_terminou(void) { return (g_ponteiro_segmento >= g_segmentos_gravados); }
+bool mapa_corrida_terminou(uint8_t contador_fim) {
+    // A corrida termina na SEGUNDA marcação da direita.
+    // A primeira (início) faz o contador ser 1.
+    // A segunda (fim) faz o contador ser 2, terminando a prova.
+    return (contador_fim >= 2);
+}
 void mapa_resetar_para_corrida(void) { g_ponteiro_segmento = 0; encoder_resetar_posicoes(); }
 
 
