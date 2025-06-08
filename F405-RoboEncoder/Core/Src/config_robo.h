@@ -37,8 +37,8 @@
 
 // --- PID do Seguidor de Linha ---
 #define PID_SETPOINT 0
-#define PID_KP 240
-#define PID_KD 2000
+#define PID_KP 300
+#define PID_KD 900
 #define PID_KI 0
 #define PID_DIVISOR 100
 #define PID_LIMITE_SAIDA 250
@@ -49,7 +49,7 @@
 #define ADC_VALOR_MAXIMO 1023.0f
 
 // --- Sensores Laterais (Marcadores) ---
-#define LIMIAR_SENSOR_LATERAL 500     // Valor ADC para considerar uma marcação detectada
+#define LIMIAR_SENSOR_LATERAL 350     // Valor ADC para considerar uma marcação detectada
 #define CICLOS_CONFIRMACAO_MARCADOR 5
 // =============================================================================
 // CONFIGURAÇÕES DO MAPEAMENTO
