@@ -83,8 +83,10 @@ typedef enum {
 static EstadoRobo g_estado_robo = ESTADO_INICIO;
 static int g_potencia_atual = 0;
 static int g_potencia_alvo = POTENCIA_INICIAL;
+static int32_t g_dist_entrada_segmento_pulsos = 0;
 static uint8_t g_fim_corrida = 0;
 static uint8_t g_fim_mapeamento = 0;
+static uint8_t g_numero_corrida = 0;
 
 volatile bool g_flag_loop_1ms = false;
 volatile bool g_flag_loop_10ms = false;
@@ -204,6 +206,7 @@ int main(void)
 	  			  break;
 
 	  		  case ESTADO_CALIBRANDO:
+	  			  marcador_lateral_resetar_calibracao();
 	  			  sensor_linha_calibrar(); // Esta função já tem seus próprios bipes
 	  			  marcador_lateral_finalizar_calibracao();
 	  			  g_estado_robo = ESTADO_AGUARDANDO_MAPEAMENTO;
@@ -250,9 +253,11 @@ int main(void)
 	  			  HAL_Delay(1000);
 	  			  motor_definir_standby(true);
 	  			  mapa_resetar_para_corrida();
+	  			  g_dist_entrada_segmento_pulsos = 0;
 	  			  g_potencia_alvo = POTENCIA_CURVA;
 	  			  g_potencia_atual = 0;
 	  			  g_fim_corrida = 0;
+	  			  g_numero_corrida++;
 	  			  g_estado_robo = ESTADO_CORRIDA;
 	  			  break;
 
@@ -814,18 +819,37 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 
 void executar_loop_rapido(void) {
-    // Contém tudo que é crítico para o controle do movimento
     velocidade_atualizar();
     int pos_linha = sensor_linha_ler_posicao();
     int correcao;
 
     if (g_estado_robo == ESTADO_MAPEAMENTO) {
-        g_potencia_alvo = POTENCIA_CURVA; // Durante o mapeamento, a potência é constante
+        g_potencia_alvo = POTENCIA_CURVA;
         correcao = pid_calcular_correcao(pos_linha);
     } else { // ESTADO_CORRIDA
         if (mapa_segmento_atual_e_reta_longa()) {
-            g_potencia_alvo = POTENCIA_RETA;
-            correcao = pid_calcular_correcao_customizada(pos_linha, 30, 800);
+        	// --- NOVA LÓGICA DE ACELERAÇÃO E FRENAGEM POR PERCENTUAL ---
+
+			// 1. Pega a distância total do segmento atual em pulsos do encoder
+			int32_t dist_total_segmento_pulsos = mapa_obter_distancia_pulsos_segmento_atual();
+
+			// 2. Calcula o ponto de transição (40% da distância total)
+			int32_t limiar_aceleracao_pulsos = (dist_total_segmento_pulsos * PORCENTAGEM_PULSOS_EM_VRETA) / 100;
+
+			// 3. Calcula a distância percorrida neste segmento em pulsos
+			int32_t dist_total_atual_pulsos = (encoder_obter_posicao_esquerda() + encoder_obter_posicao_direita()) / 2;
+			int32_t dist_percorrida_no_segmento_pulsos = dist_total_atual_pulsos - g_dist_entrada_segmento_pulsos;
+
+			// 4. Compara a distância percorrida com o limiar de 40%
+			if (dist_percorrida_no_segmento_pulsos < limiar_aceleracao_pulsos) {
+				// Se está nos primeiros 40% da reta, acelera
+				g_potencia_alvo = POTENCIA_RETA;
+			} else {
+				// Se já passou dos 40%, volta para a velocidade de curva
+				g_potencia_alvo = POTENCIA_CURVA;
+			}
+			// Usa o PID padrão para garantir estabilidade
+			correcao = pid_calcular_correcao(pos_linha);
         } else {
             g_potencia_alvo = POTENCIA_CURVA;
             correcao = pid_calcular_correcao(pos_linha);
@@ -857,12 +881,17 @@ void executar_loop_lento(void) {
         }
     }
     else if (g_estado_robo == ESTADO_CORRIDA) {
-        if (marcador == MARCADOR_ESQUERDA || marcador == MARCADOR_DIREITA) {
-            iu_buzina_temporizada(100);
-            mapa_avancar_segmento();
-            if (marcador == MARCADOR_DIREITA) {
-                g_fim_corrida++;
-            }
+    	if (marcador == MARCADOR_ESQUERDA || marcador == MARCADOR_DIREITA) {
+			iu_buzina_temporizada(100);
+
+			// Antes de avançar para o próximo segmento, salve a distância atual
+			g_dist_entrada_segmento_pulsos = (encoder_obter_posicao_esquerda() + encoder_obter_posicao_direita()) / 2;
+
+			mapa_avancar_segmento();
+
+			if (marcador == MARCADOR_DIREITA) {
+				g_fim_corrida++;
+			}
             // A verificação de fim de corrida é feita aqui mesmo
             if (mapa_corrida_terminou(g_fim_corrida)) {
                 g_estado_robo = ESTADO_FINALIZADO;

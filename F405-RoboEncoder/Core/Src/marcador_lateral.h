@@ -22,4 +22,5 @@ void marcador_lateral_inicializar(volatile uint16_t* adc_dma_buffer);
 TipoMarcador marcador_lateral_verificar(void);
 void marcador_lateral_calibrar_ciclo(void);
 void marcador_lateral_finalizar_calibracao(void);
+void marcador_lateral_resetar_calibracao(void);
 #endif /* INC_MARCADOR_LATERAL_H_ */
