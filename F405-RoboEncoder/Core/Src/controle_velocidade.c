@@ -46,11 +46,18 @@ float velocidade_obter_media_mmps(void) {
 int velocidade_rampa_potencia(int potencia_atual, int potencia_alvo) {
     int nova_potencia = potencia_atual;
     if (nova_potencia < potencia_alvo) {
-        nova_potencia++;
-    } else if (nova_potencia > potencia_alvo) {
-        nova_potencia--;
-    }
-    if (nova_potencia > POTENCIA_MAX_MOTOR) nova_potencia = POTENCIA_MAX_MOTOR;
-    if (nova_potencia < 0) nova_potencia = 0;
-    return nova_potencia;
+		nova_potencia += PASSO_RAMPA_POTENCIA;
+		if (nova_potencia > potencia_alvo) {
+			nova_potencia = potencia_alvo;
+		}
+	} else if (nova_potencia > potencia_alvo) {
+		nova_potencia -= PASSO_RAMPA_POTENCIA;
+		if (nova_potencia < potencia_alvo) {
+			nova_potencia = potencia_alvo;
+		}
+	}
+
+	if (nova_potencia > POTENCIA_MAX_MOTOR) nova_potencia = POTENCIA_MAX_MOTOR;
+	if (nova_potencia < 0) nova_potencia = 0;
+	return nova_potencia;
 }

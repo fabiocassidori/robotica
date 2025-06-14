@@ -20,6 +20,8 @@ bool mapa_segmento_atual_concluido(void);
 bool mapa_segmento_atual_e_reta(void);
 bool mapa_segmento_atual_e_reta_longa(void);
 void mapa_avancar_segmento(void);
+int32_t mapa_obter_distancia_pulsos_segmento_atual(void);
 void mapa_logar_dados_swo(void);
+int mapa_obter_distancia_segmento_atual(void);
 
 #endif /* INC_MAPA_PISTA_H_ */

@@ -18,6 +18,7 @@
 static int g_mapa_dist_esq[TAMANHO_MAPA];
 static int g_mapa_dist_dir[TAMANHO_MAPA];
 static int g_mapa_dist_media[TAMANHO_MAPA];
+static int32_t g_mapa_dist_media_pulsos[TAMANHO_MAPA];
 static int g_mapa_raio[TAMANHO_MAPA];
 static int g_mapa_potencia[TAMANHO_MAPA];
 
@@ -30,23 +31,37 @@ void mapa_inicializar(void) {
     for (int i = 0; i < TAMANHO_MAPA; i++) {
         g_mapa_dist_esq[i] = 0; g_mapa_dist_dir[i] = 0; g_mapa_dist_media[i] = 0;
         g_mapa_raio[i] = 0; g_mapa_potencia[i] = 0;
+        g_mapa_dist_media_pulsos[i] = 0;
     }
     g_segmentos_gravados = 0; g_ponteiro_segmento = 0;
 }
 
 void mapa_gravar_segmento(void) {
     if (g_segmentos_gravados >= TAMANHO_MAPA) { printf("ERRO: Mapa cheio!\r\n"); return; }
-    g_mapa_dist_esq[g_segmentos_gravados] = (int)(CONSTANTE_DISTANCIA * encoder_obter_posicao_esquerda());
-    g_mapa_dist_dir[g_segmentos_gravados] = (int)(CONSTANTE_DISTANCIA * encoder_obter_posicao_direita());
-    g_mapa_dist_media[g_segmentos_gravados] = (g_mapa_dist_esq[g_segmentos_gravados] + g_mapa_dist_dir[g_segmentos_gravados]) / 2;
-    int32_t diff = g_mapa_dist_esq[g_segmentos_gravados] - g_mapa_dist_dir[g_segmentos_gravados];
-    if (diff == 0) diff = 1;
-    int32_t sum = g_mapa_dist_esq[g_segmentos_gravados] + g_mapa_dist_dir[g_segmentos_gravados];
-    g_mapa_raio[g_segmentos_gravados] = abs((int)(6 * sum / diff));
-    g_mapa_potencia[g_segmentos_gravados] = (g_mapa_raio[g_segmentos_gravados] > LIMIAR_CURVA_RETA) ? POTENCIA_RETA : POTENCIA_CURVA;
-    if (g_segmentos_gravados == 0) { g_mapa_potencia[g_segmentos_gravados] = POTENCIA_CURVA; }
-    encoder_resetar_posicoes();
-    g_segmentos_gravados++;
+
+	// Primeiro, captura as posições em pulsos
+	int32_t pos_esq_pulsos = encoder_obter_posicao_esquerda();
+	int32_t pos_dir_pulsos = encoder_obter_posicao_direita();
+
+	// Salva a distância média em pulsos
+	g_mapa_dist_media_pulsos[g_segmentos_gravados] = (pos_esq_pulsos + pos_dir_pulsos) / 2;
+
+
+	// Converte para mm e continua com a lógica original
+	g_mapa_dist_esq[g_segmentos_gravados] = (int)(PULSOS_PARA_MM * pos_esq_pulsos);
+	g_mapa_dist_dir[g_segmentos_gravados] = (int)(PULSOS_PARA_MM * pos_dir_pulsos);
+	g_mapa_dist_media[g_segmentos_gravados] = (g_mapa_dist_esq[g_segmentos_gravados] + g_mapa_dist_dir[g_segmentos_gravados]) / 2;
+
+	int32_t diff = g_mapa_dist_esq[g_segmentos_gravados] - g_mapa_dist_dir[g_segmentos_gravados];
+	if (diff == 0) diff = 1;
+	int32_t sum = g_mapa_dist_esq[g_segmentos_gravados] + g_mapa_dist_dir[g_segmentos_gravados];
+	g_mapa_raio[g_segmentos_gravados] = abs((int)(6 * sum / diff));
+	g_mapa_potencia[g_segmentos_gravados] = (g_mapa_raio[g_segmentos_gravados] > LIMIAR_CURVA_RETA) ? POTENCIA_RETA : POTENCIA_CURVA;
+
+	if (g_segmentos_gravados == 0) { g_mapa_potencia[g_segmentos_gravados] = POTENCIA_CURVA; }
+
+	encoder_resetar_posicoes();
+	g_segmentos_gravados++;
 }
 
 bool mapa_corrida_terminou(uint8_t contador_fim) {
@@ -71,10 +86,12 @@ bool mapa_segmento_atual_concluido(void) {
 
     // Converte a distância do mapa para pulsos para fazer a comparação
     // A constante de distância é ~0.335, o inverso é ~2.985
-    float pulsos_por_unidade_mapa = 1.0f / CONSTANTE_DISTANCIA;
-    int32_t pulsos_alvo = (int32_t)(g_mapa_dist_media[g_ponteiro_segmento] * pulsos_por_unidade_mapa);
+	// O fator de conversão é o inverso de PULSOS_PARA_MM.
+    // Converte a distância do mapa (que está em mm) de volta para pulsos para a comparação.
+	float pulsos_por_mm = 1.0f / PULSOS_PARA_MM;
+	int32_t pulsos_alvo = (int32_t)(g_mapa_dist_media[g_ponteiro_segmento] * pulsos_por_mm);
 
-    return (dist_media_pulsos > pulsos_alvo);
+	return (dist_media_pulsos > pulsos_alvo);
 }
 
 bool mapa_segmento_atual_e_reta(void) {
@@ -86,6 +103,17 @@ void mapa_avancar_segmento(void) {
 	if (g_ponteiro_segmento < g_segmentos_gravados - 1) {
 	       g_ponteiro_segmento++;
 	   }
+}
+
+/**
+ * @brief Retorna a distância média (em unidades de mapa) do segmento atual.
+ * @return A distância do segmento.
+ */
+int mapa_obter_distancia_segmento_atual(void) {
+    if (g_ponteiro_segmento >= g_segmentos_gravados) {
+        return 0;
+    }
+    return g_mapa_dist_media[g_ponteiro_segmento];
 }
 
 /**
@@ -108,7 +136,14 @@ bool mapa_segmento_atual_e_reta_longa(void) {
     // 2. Se for uma reta, verifica se o comprimento gravado excede o limiar
     return (g_mapa_dist_media[g_ponteiro_segmento] > LIMIAR_DISTANCIA_RETA_LONGA);
 }
-// ... (função mapa_logar_dados_swo permanece a mesma) ...
+
+int32_t mapa_obter_distancia_pulsos_segmento_atual(void) {
+    if (g_ponteiro_segmento >= g_segmentos_gravados) {
+        return 0;
+    }
+    return g_mapa_dist_media_pulsos[g_ponteiro_segmento];
+}
+
 void mapa_logar_dados_swo(void) {
     printf("Iniciando impressao dos dados via SWO...\r\n");
     printf("Potencias: ;");
