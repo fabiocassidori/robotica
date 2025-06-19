@@ -844,12 +844,13 @@ void executar_loop_rapido(void) {
 			if (dist_percorrida_no_segmento_pulsos < limiar_aceleracao_pulsos) {
 				// Se está nos primeiros 40% da reta, acelera
 				g_potencia_alvo = POTENCIA_RETA;
+				correcao = pid_calcular_correcao_customizada(pos_linha, PID_KP_RETA, PID_KD_RETA);
 			} else {
 				// Se já passou dos 40%, volta para a velocidade de curva
-				g_potencia_alvo = POTENCIA_CURVA;
+				correcao = pid_calcular_correcao(pos_linha);
 			}
 			// Usa o PID padrão para garantir estabilidade
-			correcao = pid_calcular_correcao(pos_linha);
+			//correcao = pid_calcular_correcao_customizada(pos_linha, PID_KP_RETA, PID_KD_RETA);
         } else {
             g_potencia_alvo = POTENCIA_CURVA;
             correcao = pid_calcular_correcao(pos_linha);

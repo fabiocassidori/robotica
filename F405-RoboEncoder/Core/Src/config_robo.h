@@ -36,8 +36,8 @@
 
 // --- PID do Seguidor de Linha ---
 #define PID_SETPOINT 0
-#define PID_KP 310
-#define PID_KD 2900
+#define PID_KP 310 //270//310
+#define PID_KD 2900 //2500 //2900
 #define PID_KI 0
 
 // --- NOVAS DEFINIÇÕES PARA PID EM RETAS ---
@@ -45,7 +45,13 @@
 #define PID_KD_RETA 4500     // Ganho Derivativo para retas de alta velocidade
 
 #define PID_DIVISOR 100
-#define PID_LIMITE_SAIDA 250
+/*
+ * Se PID_LIMITE_SAIDA = 150, CORREÇAO MÁXIMA É IGUAL A 150
+ * LOGO SE V_CURVA É 80 -> 80 + 150 = POTENCIA MAXIMA É 230,
+ * OU SEJA, NAO SATURA OS 8BITS.
+ * EM VRETA NÃO TEM PROBLEMA SATURAR
+ */
+#define PID_LIMITE_SAIDA 150
 
 // =============================================================================
 // CONFIGURAÇÕES DOS SENSORES
@@ -53,7 +59,7 @@
 #define ADC_VALOR_MAXIMO 1023.0f
 
 // --- Sensores Laterais (Marcadores) ---
-#define LIMIAR_SENSOR_LATERAL 600    // Valor ADC para considerar uma marcação detectada
+#define LIMIAR_SENSOR_LATERAL 450    // Valor ADC para considerar uma marcação detectada
 // Número de ciclos (de 10ms cada) que o sensor precisa estar ativo para confirmar uma marcação.
 #define MARCADOR_CICLOS_DETECCAO 2
 // Número de ciclos (de 10ms cada) que o sensor precisa estar inativo para confirmar o fim da marcação.
@@ -66,10 +72,10 @@
 // Distância (em unidades de mapa) a partir da qual uma reta é considerada "longa"
 // o suficiente para aplicar potência máxima. (Valor ~50cm)
 #define LIMIAR_DISTANCIA_RETA_LONGA 500
-#define LIMIAR_CURVA_RETA 300 // Raio calculado a partir do qual se considera uma reta
+#define LIMIAR_CURVA_RETA 250 // Raio calculado a partir do qual se considera uma reta
 // Passo de incremento/decremento da potência na rampa. Valor maior = aceleração/frenagem mais rápidas.
 #define PASSO_RAMPA_POTENCIA 5
-#define PORCENTAGEM_PULSOS_EM_VRETA 50
+#define PORCENTAGEM_PULSOS_EM_VRETA 40
 // =============================================================================
 // CONFIGURAÇÕES DA BATERIA
 // =============================================================================
