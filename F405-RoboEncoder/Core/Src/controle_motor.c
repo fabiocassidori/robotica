@@ -30,6 +30,9 @@ void motor_definir_standby(bool ligar) {
 }
 
 void motor_definir_potencia(int potencia_esquerda, int potencia_direita) {
+
+
+
     motor_esquerdo_definir(potencia_esquerda);
     motor_direito_definir(potencia_direita);
 }
