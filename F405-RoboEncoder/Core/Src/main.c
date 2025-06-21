@@ -847,6 +847,7 @@ void executar_loop_rapido(void) {
 				correcao = pid_calcular_correcao_customizada(pos_linha, PID_KP_RETA, PID_KD_RETA);
 			} else {
 				// Se já passou dos 40%, volta para a velocidade de curva
+				g_potencia_alvo = POTENCIA_CURVA;
 				correcao = pid_calcular_correcao(pos_linha);
 			}
 			// Usa o PID padrão para garantir estabilidade
@@ -872,18 +873,22 @@ void executar_loop_lento(void) {
     // A lógica de eventos que você já tinha é movida para cá
     if (g_estado_robo == ESTADO_MAPEAMENTO) {
         if (marcador == MARCADOR_ESQUERDA || marcador == MARCADOR_DIREITA) {
-            iu_buzina_temporizada(50);
+            //iu_buzina_temporizada(50);
             mapa_gravar_segmento();
             if (marcador == MARCADOR_DIREITA) {
-                g_fim_mapeamento++;
+            	iu_buzina_temporizada(50);
+            	g_fim_mapeamento++;
+            }
+            if (marcador == MARCADOR_ESQUERDA) {
+            	iu_buzina_temporizada(30);
             }
         } else if (marcador == MARCADOR_AMBOS) {
-            iu_buzina_temporizada(100);
+            iu_buzina_temporizada(80);
         }
     }
     else if (g_estado_robo == ESTADO_CORRIDA) {
     	if (marcador == MARCADOR_ESQUERDA || marcador == MARCADOR_DIREITA) {
-			iu_buzina_temporizada(100);
+			iu_buzina_temporizada(30);
 
 			// Antes de avançar para o próximo segmento, salve a distância atual
 			g_dist_entrada_segmento_pulsos = (encoder_obter_posicao_esquerda() + encoder_obter_posicao_direita()) / 2;
