@@ -15,7 +15,7 @@
 // CONFIGURAÇÕES GERAIS E FÍSICAS
 // =============================================================================
 #define NUM_SENSORES_LINHA 6
-#define CICLOS_CALIBRACAO 100       // Quantidade de leituras para calibrar o sensor de linha
+#define CICLOS_CALIBRACAO 120       // Quantidade de leituras para calibrar o sensor de linha
 #define INTERVALO_LOOP_CONTROLE_S 0.001f  // Intervalo em segundos
 
 // --- Física do Robô ---
@@ -36,12 +36,12 @@
 
 // --- PID do Seguidor de Linha ---
 #define PID_SETPOINT 0
-#define PID_KP 310 //270//310
-#define PID_KD 2900 //2500 //2900
+#define PID_KP 310
+#define PID_KD 2900
 #define PID_KI 0
 
 // --- NOVAS DEFINIÇÕES PARA PID EM RETAS ---
-#define PID_KP_RETA 140      // Ganho Proporcional para retas de alta velocidade
+#define PID_KP_RETA 180      // 140 Ganho Proporcional para retas de alta velocidade
 #define PID_KD_RETA 4500     // Ganho Derivativo para retas de alta velocidade
 
 #define PID_DIVISOR 100
@@ -60,10 +60,6 @@
 
 // --- Sensores Laterais (Marcadores) ---
 #define LIMIAR_SENSOR_LATERAL 300    // Valor ADC para considerar uma marcação detectada
-// Número de ciclos (de 10ms cada) que o sensor precisa estar ativo para confirmar uma marcação.
-#define MARCADOR_CICLOS_DETECCAO 2
-// Número de ciclos (de 10ms cada) que o sensor precisa estar inativo para confirmar o fim da marcação.
-#define MARCADOR_CICLOS_LIBERACAO 1
 // =============================================================================
 // CONFIGURAÇÕES DO MAPEAMENTO
 // =============================================================================

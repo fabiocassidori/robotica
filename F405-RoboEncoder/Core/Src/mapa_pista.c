@@ -14,7 +14,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-// ... (variáveis estáticas do mapa permanecem as mesmas) ...
+
 static int g_mapa_dist_esq[TAMANHO_MAPA];
 static int g_mapa_dist_dir[TAMANHO_MAPA];
 static int g_mapa_dist_media[TAMANHO_MAPA];
@@ -26,7 +26,8 @@ static int g_segmentos_gravados = 0;
 static int g_ponteiro_segmento = 0;
 
 
-// ... (funções mapa_inicializar, mapa_gravar_segmento, mapa_mapeamento_terminou, mapa_corrida_terminou, mapa_resetar_para_corrida permanecem as mesmas) ...
+/* Funções mapa_inicializar, mapa_gravar_segmento, mapa_mapeamento_terminou,
+mapa_corrida_terminou, mapa_resetar_para_corrida*/
 void mapa_inicializar(void) {
     for (int i = 0; i < TAMANHO_MAPA; i++) {
         g_mapa_dist_esq[i] = 0; g_mapa_dist_dir[i] = 0; g_mapa_dist_media[i] = 0;
@@ -73,26 +74,12 @@ bool mapa_corrida_terminou(uint8_t contador_fim) {
 void mapa_resetar_para_corrida(void) { g_ponteiro_segmento = 0; encoder_resetar_posicoes(); }
 
 
-// CORREÇÃO: Retorna a potência do segmento ATUAL.
+// Retorna a potência do segmento ATUAL.
 int mapa_obter_potencia_alvo(void) {
     if (g_ponteiro_segmento >= g_segmentos_gravados) return 0; // Se já terminou, para
     return g_mapa_potencia[g_ponteiro_segmento];
 }
 
-// CORREÇÃO: Compara a distância percorrida com a distância do segmento ATUAL.
-bool mapa_segmento_atual_concluido(void) {
-    if (g_ponteiro_segmento >= g_segmentos_gravados) return true;
-    int32_t dist_media_pulsos = (encoder_obter_posicao_esquerda() + encoder_obter_posicao_direita()) / 2;
-
-    // Converte a distância do mapa para pulsos para fazer a comparação
-    // A constante de distância é ~0.335, o inverso é ~2.985
-	// O fator de conversão é o inverso de PULSOS_PARA_MM.
-    // Converte a distância do mapa (que está em mm) de volta para pulsos para a comparação.
-	float pulsos_por_mm = 1.0f / PULSOS_PARA_MM;
-	int32_t pulsos_alvo = (int32_t)(g_mapa_dist_media[g_ponteiro_segmento] * pulsos_por_mm);
-
-	return (dist_media_pulsos > pulsos_alvo);
-}
 
 bool mapa_segmento_atual_e_reta(void) {
     if (g_ponteiro_segmento >= g_segmentos_gravados) return false;
@@ -103,17 +90,6 @@ void mapa_avancar_segmento(void) {
 	if (g_ponteiro_segmento < g_segmentos_gravados - 1) {
 	       g_ponteiro_segmento++;
 	   }
-}
-
-/**
- * @brief Retorna a distância média (em unidades de mapa) do segmento atual.
- * @return A distância do segmento.
- */
-int mapa_obter_distancia_segmento_atual(void) {
-    if (g_ponteiro_segmento >= g_segmentos_gravados) {
-        return 0;
-    }
-    return g_mapa_dist_media[g_ponteiro_segmento];
 }
 
 /**

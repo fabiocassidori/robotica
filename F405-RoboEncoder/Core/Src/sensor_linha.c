@@ -83,9 +83,6 @@ bool sensor_linha_esta_na_linha(void) {
     return g_esta_na_linha;
 }
 
-int sensor_linha_obter_ultimo_erro(void) {
-    return g_ultimo_erro;
-}
 
 static void ler_e_normalizar(uint16_t* valores_normalizados) {
     for (uint8_t i = 1; i <= NUM_SENSORES_LINHA; i++) {
