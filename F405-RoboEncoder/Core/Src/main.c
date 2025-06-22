@@ -86,6 +86,7 @@ static int g_potencia_alvo = POTENCIA_INICIAL;
 static int32_t g_dist_entrada_segmento_pulsos = 0;
 static uint8_t g_fim_corrida = 0;
 static uint8_t g_fim_mapeamento = 0;
+static uint8_t g_numero_corrida = 0;
 
 volatile bool g_flag_loop_1ms = false;
 volatile bool g_flag_loop_10ms = false;
@@ -256,6 +257,7 @@ int main(void)
 	  			  g_potencia_alvo = POTENCIA_CURVA;
 	  			  g_potencia_atual = 0;
 	  			  g_fim_corrida = 0;
+	  			  g_numero_corrida++;
 	  			  g_estado_robo = ESTADO_CORRIDA;
 	  			  break;
 
@@ -275,9 +277,9 @@ int main(void)
 	  			   motor_definir_standby(false);
 	  			   printf("ERRO! Sistema parado.\n");
 	  			   while(1) {
-	  				 iu_definir_buzina_persistente(true);
-	                 iu_atualizar();
-	  				 HAL_Delay(500);
+	  				   iu_buzina_temporizada(100);
+	                     iu_atualizar();
+	  				   HAL_Delay(500);
 	  			   }
 	  			  break;
 	  	    }
@@ -871,16 +873,17 @@ void executar_loop_lento(void) {
     // A lógica de eventos que você já tinha é movida para cá
     if (g_estado_robo == ESTADO_MAPEAMENTO) {
         if (marcador == MARCADOR_ESQUERDA || marcador == MARCADOR_DIREITA) {
+            //iu_buzina_temporizada(50);
             mapa_gravar_segmento();
             if (marcador == MARCADOR_DIREITA) {
             	iu_buzina_temporizada(50);
-            	//g_fim_mapeamento++;
+            	g_fim_mapeamento++;
             }
             if (marcador == MARCADOR_ESQUERDA) {
             	iu_buzina_temporizada(30);
             }
         } else if (marcador == MARCADOR_AMBOS) {
-           //Não toca buzina
+            iu_buzina_temporizada(80);
         }
     }
     else if (g_estado_robo == ESTADO_CORRIDA) {
@@ -900,7 +903,7 @@ void executar_loop_lento(void) {
                 g_estado_robo = ESTADO_FINALIZADO;
             }
         } else if (marcador == MARCADOR_AMBOS) {
-            //não toca buzina
+            iu_buzina_temporizada(100);
         }
     }
 }
