@@ -23,4 +23,5 @@ TipoMarcador marcador_lateral_verificar(void);
 void marcador_lateral_calibrar_ciclo(void);
 void marcador_lateral_finalizar_calibracao(void);
 void marcador_lateral_resetar_calibracao(void);
+void depuracao_sensores_laterais(void);
 #endif /* INC_MARCADOR_LATERAL_H_ */

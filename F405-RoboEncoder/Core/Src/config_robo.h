@@ -1,8 +1,8 @@
 /*
  * config_robo.h
  *
- *  Created on: Jun 5, 2025
- *      Author: jlour
+ * Created on: Jun 5, 2025
+ * Author: jlour
  */
 
 #ifndef INC_CONFIG_ROBO_H_
@@ -23,25 +23,32 @@
 #define CONSTANTE_PI 3.1415926535f
 #define ENCODER_PPR 120              // Pulsos por revolução do encoder
 // Converte pulsos do encoder para milímetros. (DIAMETRO_RODA_MM * PI) / ENCODER_PPR
-#define PULSOS_PARA_MM 0.5812f
+#define PULSOS_PARA_MM ((DIAMETRO_RODA_MM * CONSTANTE_PI) / ENCODER_PPR)
+
+//TRATAMENTO DE VALORES
+#define SENSOR_POSICAO_MIN   0 // EXTREMA DIREITA DO SENSOR DE LINHA
+#define SENSOR_POSICAO_MAX   5000 // EXTREMA ESQUERDA DO SENSOR DE LINHA
+#define POSICAO_ENTRADA_MIN     -255 //INTERPOLACAO - MAXIMA ESQUERDA
+#define POSICAO_ENTRADA_MAX      255 //INTERPOLACAO - MAXIMA DIREITA
+
 // =============================================================================
 // CONFIGURAÇÕES DO CONTROLE E MOTORES
 // =============================================================================
 // --- Potência e Velocidade ---
-#define POTENCIA_INICIAL 80
+#define POTENCIA_MAPEAMENTO 70
 #define POTENCIA_MAX_MOTOR 255
 #define PERIODO_PWM_MOTOR 3359         // Período do registrador do TIM8 para PWM 50khz
 #define POTENCIA_RETA 245
-#define POTENCIA_CURVA 70
+#define POTENCIA_CURVA 90
 
-// --- PID do Seguidor de Linha ---
+// --- PID MAPEAMENTO/CURVAS ---
 #define PID_SETPOINT 0
 #define PID_KP 310 //270//310
 #define PID_KD 2900 //2500 //2900
 #define PID_KI 0
 
-// --- NOVAS DEFINIÇÕES PARA PID EM RETAS ---
-#define PID_KP_RETA 140      // Ganho Proporcional para retas de alta velocidade
+// ---  PID EM RETAS ---
+#define PID_KP_RETA 190      // Ganho Proporcional para retas de alta velocidade
 #define PID_KD_RETA 4500     // Ganho Derivativo para retas de alta velocidade
 
 #define PID_DIVISOR 100
@@ -59,11 +66,7 @@
 #define ADC_VALOR_MAXIMO 1023.0f
 
 // --- Sensores Laterais (Marcadores) ---
-#define LIMIAR_SENSOR_LATERAL 300    // Valor ADC para considerar uma marcação detectada
-// Número de ciclos (de 10ms cada) que o sensor precisa estar ativo para confirmar uma marcação.
-#define MARCADOR_CICLOS_DETECCAO 2
-// Número de ciclos (de 10ms cada) que o sensor precisa estar inativo para confirmar o fim da marcação.
-#define MARCADOR_CICLOS_LIBERACAO 1
+#define LIMIAR_SENSOR_LATERAL 450    // Valor ADC para considerar uma marcação detectada
 // =============================================================================
 // CONFIGURAÇÕES DO MAPEAMENTO
 // =============================================================================
@@ -75,7 +78,10 @@
 #define LIMIAR_CURVA_RETA 250 // Raio calculado a partir do qual se considera uma reta
 // Passo de incremento/decremento da potência na rampa. Valor maior = aceleração/frenagem mais rápidas.
 #define PASSO_RAMPA_POTENCIA 5
-#define PORCENTAGEM_PULSOS_EM_VRETA 50
+#define PORCENTAGEM_PULSOS_EM_VRETA 40
+#define TEMPO_FRENAGEM_MS 15
+#define TEMPO_MAX_LINHA_PERDIDA_MS 100
+#define POS_LINHA_PERDIDA 250
 // =============================================================================
 // CONFIGURAÇÕES DA BATERIA
 // =============================================================================
