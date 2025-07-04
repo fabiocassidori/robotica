@@ -76,6 +76,7 @@ typedef enum {
     ESTADO_LOGANDO,
     ESTADO_AGUARDANDO_CORRIDA,
     ESTADO_CORRIDA,
+	ESTADO_ACELERANDO_RETA,
 	ESTADO_FRENAGEM,
 	ESTADO_FORA_DA_PISTA,
     ESTADO_FINALIZADO,
@@ -191,8 +192,7 @@ int main(void)
 
 	  // --- LOOP RÁPIDO (1ms) ---
 	      if (g_flag_loop_1ms) {
-	          g_flag_loop_1ms = false;
-
+	        g_flag_loop_1ms = false;
 			// A lógica de leitura e mapeamento deve estar aqui para a verificação
 			int pos_bruta = sensor_linha_ler_posicao();
 //			printf("posicao bruta: %d\n", pos_bruta);
@@ -200,46 +200,53 @@ int main(void)
 //			printf("posicao mapeada: %d\n", pos_mapeada);
 //			HAL_Delay(200);
 
-	          if (g_estado_robo == ESTADO_CORRIDA || g_estado_robo == ESTADO_FRENAGEM || g_estado_robo == ESTADO_MAPEAMENTO) {
+	          if (g_estado_robo == ESTADO_CORRIDA ||
+	        	  g_estado_robo == ESTADO_FRENAGEM ||
+				  g_estado_robo == ESTADO_MAPEAMENTO) {
 
-					// A verificação agora usa a pos_mapeada.
-					// Se o valor mapeado estiver nos extremos (ex: > 250 ou < -250), consideramos a linha perdida.
-					// A constante POS_LINHA_PERDIDA em config_robo.h deve ser ajustada para ~250.
-	        	    if (abs(pos_mapeada) > POS_LINHA_PERDIDA) {
-	                     if (g_contador_linha_perdida_ms < TEMPO_MAX_LINHA_PERDIDA_MS) {
-	                         g_contador_linha_perdida_ms += 2;
-	                     }
-	                 } else {
-	                     g_contador_linha_perdida_ms = 0;
-	                 }
+				// Se o valor mapeado estiver nos extremos (ex: > 250 ou < -250), considera-se a linha perdida.
+				// A constante POS_LINHA_PERDIDA em config_robo.h deve ser ajustada para ~250.
+				if (abs(pos_mapeada) > POS_LINHA_PERDIDA) {
+					 if (g_contador_linha_perdida_ms < TEMPO_MAX_LINHA_PERDIDA_MS) {
+						 g_contador_linha_perdida_ms += 2;
+					 }
+				 } else {
+					 g_contador_linha_perdida_ms = 0;
+				 }
 
-	                 if (g_contador_linha_perdida_ms >= TEMPO_MAX_LINHA_PERDIDA_MS) {
-	                     g_estado_robo = ESTADO_FORA_DA_PISTA;
-	                     motor_parar(true);
-	                     iu_aguardar_botao();
-	                     motor_parar(false);
+				 if (g_contador_linha_perdida_ms >= TEMPO_MAX_LINHA_PERDIDA_MS) {
+					 g_estado_robo = ESTADO_FORA_DA_PISTA;
+					 motor_parar(true);
+					 iu_aguardar_botao();
+					 motor_parar(false);
+				 }
+			 }
 
-	                 }
-	             }
+	          if (g_estado_robo == ESTADO_MAPEAMENTO ||
+				  g_estado_robo == ESTADO_CORRIDA ||
+				  g_estado_robo == ESTADO_ACELERANDO_RETA ||
+				  g_estado_robo == ESTADO_FRENAGEM) {
 
-
-	          if (g_estado_robo == ESTADO_MAPEAMENTO || g_estado_robo == ESTADO_CORRIDA || g_estado_robo == ESTADO_FRENAGEM) {
 	        	  executar_loop_rapido(pos_mapeada);
 	          }
 	      }
+
 		   //--- LOOP LENTO (10ms) ---
 		  if (g_flag_loop_10ms) {
+
 			  g_flag_loop_10ms = false;
-
 			  bateria_atualizar();
-			  iu_atualizar(); // Atualiza buzina/LEDs
+			  iu_atualizar(); // Atualiza buzina
 
-			  if (g_estado_robo == ESTADO_MAPEAMENTO || g_estado_robo == ESTADO_CORRIDA) {
+			  if (g_estado_robo == ESTADO_MAPEAMENTO ||
+			      g_estado_robo == ESTADO_CORRIDA ||
+			      g_estado_robo == ESTADO_ACELERANDO_RETA) {
+
 				  executar_loop_lento(); // Verifica marcadores de pista
 			  }
 		  }
 
-	  // Máquina de estados principal
+		  // Máquina de estados principal
 	  	  switch (g_estado_robo) {
 	  		  case ESTADO_INICIO:
 	  			  printf("Pressione o botao para calibrar.\r\n");
@@ -250,7 +257,7 @@ int main(void)
 
 	  		  case ESTADO_CALIBRANDO:
 	  			  marcador_lateral_resetar_calibracao();
-	  			  sensor_linha_calibrar(); // Esta função já tem seus próprios bipes
+	  			  sensor_linha_calibrar();
 	  			  marcador_lateral_finalizar_calibracao();
 	  			  g_estado_robo = ESTADO_AGUARDANDO_MAPEAMENTO;
 	  			  break;
@@ -258,7 +265,7 @@ int main(void)
 	  		  case ESTADO_AGUARDANDO_MAPEAMENTO:
 	  			  printf("Pressione para mapear a pista.\r\n");
 	  			  iu_aguardar_botao();
-	  			  iu_buzina_temporizada(150); // <-- BEEP DE FEEDBACK
+	  			  iu_buzina_temporizada(150);
 	  			  HAL_Delay(3000);
 	  			  motor_parar(false);
 	  			  encoder_resetar_posicoes();
@@ -297,21 +304,26 @@ int main(void)
 	  			  motor_parar(false);
 	  			  mapa_resetar_para_corrida();
 	  			  g_dist_entrada_segmento_pulsos = 0;
-	  			  g_potencia_alvo = POTENCIA_CURVA;
+	  			  g_potencia_alvo = POTENCIA_CORRIDA;
 	  			  g_potencia_atual = 0;
 	  			  g_fim_corrida = 0;
-	  			  g_estado_robo = ESTADO_CORRIDA;
+	  			  if (mapa_segmento_atual_e_reta_longa()) {
+					  g_estado_robo = ESTADO_ACELERANDO_RETA;
+				  } else {
+					  g_estado_robo = ESTADO_CORRIDA; // Caso contrário, começa em modo Corrida
+				  }
 	  			  break;
 
 	  		  case ESTADO_CORRIDA:
 	  			  break;
-
+	  		  case ESTADO_ACELERANDO_RETA:
+	  			  break;
 	  		  case ESTADO_FRENAGEM:
 	  			  break;
 
 	  		  case ESTADO_FORA_DA_PISTA:
 					motor_parar(true); // Mantém os motores parados
-					printf("ROBO PERDEU A LINHA! PISTA?!? FUI DE BASE.\r\n");
+					printf("ROBO PERDEU A LINHA!\r\n");
 					iu_buzina_temporizada(200);
 					iu_atualizar();
 					iu_aguardar_botao();
@@ -873,59 +885,62 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 
 void executar_loop_rapido(int pos_mapeada) {
-    velocidade_atualizar();
+
+	velocidade_atualizar();
 
     int correcao = 0;
 
-    // ESTADO DE FRENAGEM: Lógica para controlar a duração da frenagem
-    if (g_estado_robo == ESTADO_FRENAGEM) {
-        motor_frear(); // Mantém os freios acionados
-        if (g_contador_frenagem_ms <= 0) {
-            // Tempo de frenagem acabou, volta para o estado de corrida normal
-            g_estado_robo = ESTADO_CORRIDA;
-            g_potencia_alvo = POTENCIA_CURVA; // Prepara para a velocidade de curva
-        } else {
-            // Se ainda está freando, não faz mais nada neste ciclo
-            return;
-        }
+    // ESTADO DE MAPEAMENTO
+    if (g_estado_robo ==  ESTADO_MAPEAMENTO ) {
+    	g_potencia_alvo = POTENCIA_MAPEAMENTO;
+    	correcao = pid_calcular_correcao(pos_mapeada);
+
     }
 
-    // ESTADO DE CORRIDA: Lógica de aceleração e transição para frenagem
-    if (g_estado_robo == ESTADO_CORRIDA) {
-        if (mapa_segmento_atual_e_reta_longa()) {
-            int32_t dist_total_segmento_pulsos = mapa_obter_distancia_pulsos_segmento_atual();
-            int32_t limiar_aceleracao_pulsos = (dist_total_segmento_pulsos * PORCENTAGEM_PULSOS_EM_VRETA) / 100;
-            int32_t dist_percorrida_no_segmento_pulsos = ((encoder_obter_posicao_esquerda() + encoder_obter_posicao_direita()) / 2) - g_dist_entrada_segmento_pulsos;
+    // ESTADO DE CORRIDA
+	else if (g_estado_robo == ESTADO_CORRIDA) {
+		g_potencia_alvo = POTENCIA_CORRIDA;
+		correcao = pid_calcular_correcao(pos_mapeada);
+	}
 
-            if (dist_percorrida_no_segmento_pulsos < limiar_aceleracao_pulsos) {
-                // Acelera na reta
-                g_potencia_alvo = POTENCIA_RETA;
-                correcao = pid_calcular_correcao_customizada(pos_mapeada, PID_KP_RETA, PID_KD_RETA);
-            } else {
-                // Só freia se ainda não tiver freiado neste segmento
-                if (!g_frenagem_realizada_no_segmento) {
-                    g_frenagem_realizada_no_segmento = true; // Marca que a frenagem foi feita
-                    g_estado_robo = ESTADO_FRENAGEM;
-                    g_contador_frenagem_ms = TEMPO_FRENAGEM_MS; // Define o tempo de frenagem
-                    motor_frear();
-                    return; // Sai para o próximo ciclo se dedicar à frenagem
-                } else {
-                    // Se a frenagem já ocorreu, apenas reduz a velocidade para a de curva
-                    g_potencia_alvo = POTENCIA_CURVA;
-                    correcao = pid_calcular_correcao(pos_mapeada);
-                }
-            }
-        } else {
-            // Segmento de curva normal
-            g_potencia_alvo = POTENCIA_CURVA;
-            correcao = pid_calcular_correcao(pos_mapeada);
-        }
-    }
-    // ESTADO DE MAPEAMENTO: Lógica simples de mapeamento
-    else if (g_estado_robo == ESTADO_MAPEAMENTO) {
-        g_potencia_alvo = POTENCIA_MAPEAMENTO;
-        correcao = pid_calcular_correcao(pos_mapeada);
-    }
+    // ESTADO DE ACELERAÇÃO EM RETA
+	else if (g_estado_robo == ESTADO_ACELERANDO_RETA) {
+		// Define a potência alvo para máxima de reta
+		g_potencia_alvo = POTENCIA_RETA;
+		// Usa o PID específico para retas
+		correcao = pid_calcular_correcao_customizada(pos_mapeada, PID_KP_RETA, PID_KD_RETA);
+
+		// Calcula a distância percorrida no segmento atual
+		int32_t dist_total_segmento_pulsos = mapa_obter_distancia_pulsos_segmento_atual();
+		int32_t limiar_aceleracao_pulsos = (dist_total_segmento_pulsos * PORCENTAGEM_PULSOS_EM_VRETA) / 100;
+		int32_t dist_percorrida_no_segmento_pulsos = ((encoder_obter_posicao_esquerda() + encoder_obter_posicao_direita()) / 2) - g_dist_entrada_segmento_pulsos;
+
+		// Verifica se já percorreu a distância de aceleração
+		if (dist_percorrida_no_segmento_pulsos >= limiar_aceleracao_pulsos) {
+			 // Distância percorrida, hora de frear.
+			 if (!g_frenagem_realizada_no_segmento) {
+				 g_frenagem_realizada_no_segmento = true; // Marca que a frenagem foi feita
+				 g_estado_robo = ESTADO_FRENAGEM;
+				 g_contador_frenagem_ms = TEMPO_FRENAGEM_MS; // Define o tempo
+				 motor_frear();
+				 return; // Sai do loop para se dedicar à frenagem
+			 }
+		}
+		// Se ainda não atingiu o limiar, continua acelerando (a lógica de potência abaixo cuidará disso)
+	}
+
+	// ESTADO DE FRENAGEM: Lógica para controlar a duração da frenagem
+	else if (g_estado_robo == ESTADO_FRENAGEM) {
+	   motor_frear(); // Mantém os freios acionados
+			  if (g_contador_frenagem_ms <= 0) {
+				  // Tempo de frenagem acabou, volta para o estado de corrida normal
+				  g_estado_robo = ESTADO_CORRIDA;
+				  g_potencia_alvo = POTENCIA_CORRIDA; // Prepara para a velocidade de curva
+			  } else {
+				  // Se ainda está freando, não faz mais nada neste ciclo
+				  return;
+			  }
+	}
 
     // --- Controle de Potência (Comum a todos os estados de movimento) ---
     // Apenas aplica potência se não estiver em modo de frenagem
@@ -944,11 +959,10 @@ void executar_loop_lento(void) {
         return;
     }
 
-    // A lógica de eventos que você já tinha é movida para cá
+    // A lógica de Mapeamento
     if (g_estado_robo == ESTADO_MAPEAMENTO) {
         if (marcador == MARCADOR_ESQUERDA || marcador == MARCADOR_DIREITA) {
-            //iu_buzina_temporizada(50);
-            mapa_gravar_segmento();
+             mapa_gravar_segmento();
             if (marcador == MARCADOR_DIREITA) {
             	iu_buzina_temporizada(100);
             	g_fim_mapeamento++;
@@ -960,14 +974,12 @@ void executar_loop_lento(void) {
             //iu_buzina_temporizada(80);
         }
     }
-    else if (g_estado_robo == ESTADO_CORRIDA) {
+    else if (g_estado_robo == ESTADO_CORRIDA || g_estado_robo == ESTADO_ACELERANDO_RETA) {
     	if (marcador == MARCADOR_ESQUERDA || marcador == MARCADOR_DIREITA) {
 			iu_buzina_temporizada(30);
-
 			// Antes de avançar para o próximo segmento, salve a distância atual
 			g_dist_entrada_segmento_pulsos = (encoder_obter_posicao_esquerda() + encoder_obter_posicao_direita()) / 2;
 			mapa_avancar_segmento();
-
 			 // Ao avançar para um novo segmento, permite que a frenagem ocorra novamente.
 			g_frenagem_realizada_no_segmento = false;
 
@@ -975,10 +987,20 @@ void executar_loop_lento(void) {
 				iu_buzina_temporizada(100);
 				g_fim_corrida++;
 			}
-            // A verificação de fim de corrida é feita aqui mesmo
+
+			// Transição para o próximo estado correto
+			if (mapa_segmento_atual_e_reta_longa()) {
+				g_estado_robo = ESTADO_ACELERANDO_RETA;
+			} else {
+				g_estado_robo = ESTADO_CORRIDA;
+			}
+
+			// A verificação de fim de corrida é feita aqui mesmo
             if (mapa_corrida_terminou(g_fim_corrida)) {
                 g_estado_robo = ESTADO_FINALIZADO;
             }
+
+
         } else if (marcador == MARCADOR_AMBOS) {
             //iu_buzina_temporizada(100);
         }

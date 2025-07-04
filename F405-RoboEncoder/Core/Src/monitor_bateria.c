@@ -2,7 +2,7 @@
  * monitor_bateria.c
  *
  *  Created on: Jun 5, 2025
- *      Author: jlour
+ *      Author: Fábio Couto
  */
 
 
@@ -34,7 +34,6 @@ void bateria_atualizar(void) {
 
     float tensao_atual = ler_tensao_instantanea();
 
-    // CORREÇÃO: Lógica de inicialização mais robusta
     // Se a leitura for inválida (próxima de zero) e o filtro ainda não foi inicializado,
     // simplesmente ignora esta medição e aguarda a próxima.
     if (tensao_atual < 1.0f && g_tensao_filtrada < 0.0f) {

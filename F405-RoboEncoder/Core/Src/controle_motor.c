@@ -2,14 +2,14 @@
  * controle_motor.c
  *
  *  Created on: Jun 5, 2025
- *      Author: jlour
+ *      Author: Fábio Couto
  */
 
 // Core/Src/controle_motor.c
 
 #include "controle_motor.h"
 #include "config_robo.h"
-#include "main.h" // <<< CORREÇÃO ADICIONADA AQUI
+#include "main.h"
 #include <stdlib.h>
 
 static TIM_HandleTypeDef *g_htim_pwm = NULL;

@@ -2,7 +2,7 @@
  * controlador_pid.h
  *
  *  Created on: Jun 5, 2025
- *      Author: jlour
+ *      Author: Fábio Couto
  */
 
 #ifndef INC_CONTROLADOR_PID_H_

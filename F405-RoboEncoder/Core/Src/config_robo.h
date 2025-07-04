@@ -2,7 +2,7 @@
  * config_robo.h
  *
  * Created on: Jun 5, 2025
- * Author: jlour
+ * Author: Fabio Couto
  */
 
 #ifndef INC_CONFIG_ROBO_H_
@@ -15,7 +15,11 @@
 // CONFIGURAÇÕES GERAIS E FÍSICAS
 // =============================================================================
 #define NUM_SENSORES_LINHA 6
-#define CICLOS_CALIBRACAO 100       // Quantidade de leituras para calibrar o sensor de linha
+/* Quantidade de leituras para calibrar o sensor de linha
+  Para achar o tempo em milissegungos é só multiplicar por CICLOS_CALIBRACAO x DELAY_CALIBRACAO
+ */
+#define CICLOS_CALIBRACAO 100
+#define DELAY_CALIBRACAO 50
 #define INTERVALO_LOOP_CONTROLE_S 0.001f  // Intervalo em segundos
 
 // --- Física do Robô ---
@@ -25,21 +29,33 @@
 // Converte pulsos do encoder para milímetros. (DIAMETRO_RODA_MM * PI) / ENCODER_PPR
 #define PULSOS_PARA_MM ((DIAMETRO_RODA_MM * CONSTANTE_PI) / ENCODER_PPR)
 
+// =============================================================================
+// CONFIGURAÇÕES DOS SENSORES
+// =============================================================================
+#define ADC_VALOR_MAXIMO 1023.0f
 //TRATAMENTO DE VALORES
 #define SENSOR_POSICAO_MIN   0 // EXTREMA DIREITA DO SENSOR DE LINHA
 #define SENSOR_POSICAO_MAX   5000 // EXTREMA ESQUERDA DO SENSOR DE LINHA
-#define POSICAO_ENTRADA_MIN     -255 //INTERPOLACAO - MAXIMA ESQUERDA
-#define POSICAO_ENTRADA_MAX      255 //INTERPOLACAO - MAXIMA DIREITA
+#define POSICAO_ENTRADA_MIN  -255 //INTERPOLACAO - MAXIMA ESQUERDA
+#define POSICAO_ENTRADA_MAX  255 //INTERPOLACAO - MAXIMA DIREITA
+
+// --- Sensores Laterais (Marcadores) ---
+ /* LIMIAR_SENSOR_LATERAL só é usado quando há falha na calibração.
+ * calibrando os sensores laterais, usa-se valor mínimo + (valor maximo - valor minimo)/2
+ */
+#define LIMIAR_SENSOR_LATERAL 450    // Valor ADC para considerar uma marcação detectada
 
 // =============================================================================
 // CONFIGURAÇÕES DO CONTROLE E MOTORES
 // =============================================================================
 // --- Potência e Velocidade ---
-#define POTENCIA_MAPEAMENTO 70
+#define POTENCIA_MAPEAMENTO 75
 #define POTENCIA_MAX_MOTOR 255
 #define PERIODO_PWM_MOTOR 3359         // Período do registrador do TIM8 para PWM 50khz
 #define POTENCIA_RETA 245
-#define POTENCIA_CURVA 90
+#define POTENCIA_CORRIDA 90
+// Passo de incremento/decremento da potência na rampa. Valor maior = aceleração/frenagem mais rápidas.
+#define PASSO_RAMPA_POTENCIA 10
 
 // --- PID MAPEAMENTO/CURVAS ---
 #define PID_SETPOINT 0
@@ -48,8 +64,8 @@
 #define PID_KI 0
 
 // ---  PID EM RETAS ---
-#define PID_KP_RETA 190      // Ganho Proporcional para retas de alta velocidade
-#define PID_KD_RETA 4500     // Ganho Derivativo para retas de alta velocidade
+#define PID_KP_RETA 190
+#define PID_KD_RETA 4500
 
 #define PID_DIVISOR 100
 /*
@@ -59,29 +75,20 @@
  * EM VRETA NÃO TEM PROBLEMA SATURAR
  */
 #define PID_LIMITE_SAIDA 150
-
-// =============================================================================
-// CONFIGURAÇÕES DOS SENSORES
-// =============================================================================
-#define ADC_VALOR_MAXIMO 1023.0f
-
-// --- Sensores Laterais (Marcadores) ---
-#define LIMIAR_SENSOR_LATERAL 450    // Valor ADC para considerar uma marcação detectada
 // =============================================================================
 // CONFIGURAÇÕES DO MAPEAMENTO
 // =============================================================================
 #define TAMANHO_MAPA 50
-// ADICIONE A NOVA LINHA ABAIXO:
-// Distância (em unidades de mapa) a partir da qual uma reta é considerada "longa"
-// o suficiente para aplicar potência máxima. (Valor ~50cm)
-#define LIMIAR_DISTANCIA_RETA_LONGA 300
-#define LIMIAR_CURVA_RETA 250 // Raio calculado a partir do qual se considera uma reta
-// Passo de incremento/decremento da potência na rampa. Valor maior = aceleração/frenagem mais rápidas.
-#define PASSO_RAMPA_POTENCIA 5
-#define PORCENTAGEM_PULSOS_EM_VRETA 40
-#define TEMPO_FRENAGEM_MS 15
+// Distância (em mm) a partir da qual uma reta é considerada "longa"
+// o suficiente para aplicar potência máxima.
+#define LIMIAR_DISTANCIA_RETA_LONGA 500
+// Raio calculado a partir do qual se considera uma reta
+#define LIMIAR_CURVA_RETA 200
+#define PORCENTAGEM_PULSOS_EM_VRETA 50
+#define TEMPO_FRENAGEM_MS 50
 #define TEMPO_MAX_LINHA_PERDIDA_MS 100
 #define POS_LINHA_PERDIDA 250
+
 // =============================================================================
 // CONFIGURAÇÕES DA BATERIA
 // =============================================================================

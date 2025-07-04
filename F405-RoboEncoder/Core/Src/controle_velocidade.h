@@ -2,7 +2,7 @@
  * controle_velocidade.h
  *
  *  Created on: Jun 5, 2025
- *      Author: jlour
+ *      Author: Fábio Couto
  */
 
 #ifndef INC_CONTROLE_VELOCIDADE_H_

@@ -24,12 +24,6 @@ static uint16_t g_calib_min_dir = ADC_VALOR_MAXIMO, g_calib_max_dir = 0;
 static uint16_t g_calib_min_esq = ADC_VALOR_MAXIMO, g_calib_max_esq = 0;
 static uint16_t g_limiar_calibrado_dir = LIMIAR_SENSOR_LATERAL;
 static uint16_t g_limiar_calibrado_esq = LIMIAR_SENSOR_LATERAL;
-//static int geo = 0;
-//static int geo1 = 0;
-//static int geo2 = 0;
-//static int geo3 = 0;
-//static int geo4 = 0;
-//static int geo5 = 0;
 
 // Funções de inicialização e reset não precisam de mudanças
 void marcador_lateral_resetar_calibracao(void) {
@@ -46,8 +40,6 @@ void marcador_lateral_inicializar(volatile uint16_t* adc_dma_buffer) {
     g_tipo_marcador_acumulado = 0;
 }
 
-
-// --- LÓGICA DE CALIBRAÇÃO IMPLEMENTADA ---
 
 /**
  * @brief Executa uma única iteração de leitura para a calibração.
@@ -108,61 +100,18 @@ void marcador_lateral_finalizar_calibracao(void) {
 }
 
 
-// --- FUNÇÃO DE VERIFICAÇÃO COMPLETAMENTE REESCRITA COM A NOVA LÓGICA ---
 TipoMarcador marcador_lateral_verificar(void) {
 
 	if (!g_adc_buffer) {
         return MARCADOR_NENHUM;
     }
-
-//    // A lógica de detecção original usa "<", o que implica que valores mais baixos
-//    // indicam uma marca. A calibração funcionará independentemente da polaridade.
-//    bool dir_agora = (g_adc_buffer[0] < g_limiar_calibrado_dir);
-//    bool esq_agora = (g_adc_buffer[7] < g_limiar_calibrado_esq);
-//
-//    TipoMarcador marcador_para_retorno = MARCADOR_NENHUM;
-//
-//    if( !esq_agora && !dir_agora){
-//    	geo = 0;
-//    }
-//	if(esq_agora && !dir_agora){
-//		geo = 1;
-//	}
-//	if(!esq_agora && dir_agora){
-//		geo = 2;
-//	}
-//	if(esq_agora && dir_agora){
-//		geo = 3;
-//	}
-//
-//	if(geo1 != geo){
-//
-//		if(geo == 0 && geo1 == 1 && geo2 == 0){
-//			 marcador_para_retorno = MARCADOR_ESQUERDA;
-//		}
-//
-//		if(geo == 0 && geo1 == 2 && geo2 == 0){
-//			marcador_para_retorno = MARCADOR_DIREITA;
-//		}
-//
-//		if(geo == 0 && ((geo1 == 3) || (geo2 == 3) || (geo3 == 3))){
-//			marcador_para_retorno = MARCADOR_AMBOS;
-//		}
-//
-//		geo5 = geo4;
-//		geo4 = geo3;
-//		geo3 = geo2;
-//		geo2 = geo1;
-//		geo1 = geo;
-//	}
-
 	 bool dir_agora = (g_adc_buffer[0] < g_limiar_calibrado_dir);
 	 bool esq_agora = (g_adc_buffer[7] < g_limiar_calibrado_esq);
 
     int estado_leitura_atual = 0;
     if (esq_agora) estado_leitura_atual |= 1; // Bit 0 para a esquerda
     if (dir_agora) estado_leitura_atual |= 2; // Bit 1 para a direita
-//     Resultado: 0=Nenhum, 1=Esquerda, 2=Direita, 3=Ambos
+//  Resultado: 0=Nenhum, 1=Esquerda, 2=Direita, 3=Ambos
 
     TipoMarcador marcador_para_retorno = MARCADOR_NENHUM;
 

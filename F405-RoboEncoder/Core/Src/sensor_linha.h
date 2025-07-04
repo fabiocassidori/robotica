@@ -2,7 +2,7 @@
  * sensor_linha.h
  *
  *  Created on: Jun 5, 2025
- *      Author: jlour
+ *      Author: Fábio Couto
  */
 
 #ifndef INC_SENSOR_LINHA_H_

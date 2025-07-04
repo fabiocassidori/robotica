@@ -2,7 +2,7 @@
  * mapa_pista.c
  *
  *  Created on: Jun 5, 2025
- *      Author: jlour
+ *      Author: Fábio Couto
  */
 
 
@@ -14,7 +14,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-// ... (variáveis estáticas do mapa permanecem as mesmas) ...
 static int g_mapa_dist_esq[TAMANHO_MAPA];
 static int g_mapa_dist_dir[TAMANHO_MAPA];
 static int g_mapa_dist_media[TAMANHO_MAPA];
@@ -26,7 +25,6 @@ static int g_segmentos_gravados = 0;
 static int g_ponteiro_segmento = 0;
 
 
-// ... (funções mapa_inicializar, mapa_gravar_segmento, mapa_mapeamento_terminou, mapa_corrida_terminou, mapa_resetar_para_corrida permanecem as mesmas) ...
 void mapa_inicializar(void) {
     for (int i = 0; i < TAMANHO_MAPA; i++) {
         g_mapa_dist_esq[i] = 0; g_mapa_dist_dir[i] = 0; g_mapa_dist_media[i] = 0;
@@ -56,9 +54,9 @@ void mapa_gravar_segmento(void) {
 	if (diff == 0) diff = 1;
 	int32_t sum = g_mapa_dist_esq[g_segmentos_gravados] + g_mapa_dist_dir[g_segmentos_gravados];
 	g_mapa_raio[g_segmentos_gravados] = abs((int)(6 * sum / diff));
-	g_mapa_potencia[g_segmentos_gravados] = (g_mapa_raio[g_segmentos_gravados] > LIMIAR_CURVA_RETA) ? POTENCIA_RETA : POTENCIA_CURVA;
+	g_mapa_potencia[g_segmentos_gravados] = (g_mapa_raio[g_segmentos_gravados] > LIMIAR_CURVA_RETA) ? POTENCIA_RETA : POTENCIA_CORRIDA;
 
-	if (g_segmentos_gravados == 0) { g_mapa_potencia[g_segmentos_gravados] = POTENCIA_CURVA; }
+	if (g_segmentos_gravados == 0) { g_mapa_potencia[g_segmentos_gravados] = POTENCIA_CORRIDA; }
 
 	encoder_resetar_posicoes();
 	g_segmentos_gravados++;
@@ -73,13 +71,13 @@ bool mapa_corrida_terminou(uint8_t contador_fim) {
 void mapa_resetar_para_corrida(void) { g_ponteiro_segmento = 0; encoder_resetar_posicoes(); }
 
 
-// CORREÇÃO: Retorna a potência do segmento ATUAL.
+// Retorna a potência do segmento ATUAL.
 int mapa_obter_potencia_alvo(void) {
     if (g_ponteiro_segmento >= g_segmentos_gravados) return 0; // Se já terminou, para
     return g_mapa_potencia[g_ponteiro_segmento];
 }
 
-// CORREÇÃO: Compara a distância percorrida com a distância do segmento ATUAL.
+// Compara a distância percorrida com a distância do segmento ATUAL.
 bool mapa_segmento_atual_concluido(void) {
     if (g_ponteiro_segmento >= g_segmentos_gravados) return true;
     int32_t dist_media_pulsos = (encoder_obter_posicao_esquerda() + encoder_obter_posicao_direita()) / 2;

@@ -2,7 +2,7 @@
  * mapa_pista.h
  *
  *  Created on: Jun 5, 2025
- *      Author: jlour
+ *      Author: Fábio Couto
  */
 
 #ifndef INC_MAPA_PISTA_H_

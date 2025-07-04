@@ -2,7 +2,7 @@
  * monitor_bateria.h
  *
  *  Created on: Jun 5, 2025
- *      Author: jlour
+ *      Author: Fábio Couto
  */
 
 #ifndef INC_MONITOR_BATERIA_H_

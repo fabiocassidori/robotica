@@ -2,7 +2,7 @@
  * controle_velocidade.c
  *
  * Created on: Jun 5, 2025
- * Author: jlour
+ * Author: Fábio Couto
  */
 
 

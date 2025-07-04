@@ -2,7 +2,7 @@
  * leitor_encoder.h
  *
  *  Created on: Jun 5, 2025
- *      Author: jlour
+ *      Author: Fábio Couto
  */
 
 #ifndef INC_LEITOR_ENCODER_H_

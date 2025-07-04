@@ -2,7 +2,7 @@
  * marcador_lateral.h
  *
  *  Created on: Jun 5, 2025
- *      Author: jlour
+ *      Author: Fábio Couto
  */
 
 #ifndef INC_MARCADOR_LATERAL_H_

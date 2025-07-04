@@ -2,7 +2,7 @@
  * sensor_linha.c
  *
  *  Created on: Jun 5, 2025
- *      Author: jlour
+ *      Author: Fábio Couto
  */
 
 #include "sensor_linha.h"
@@ -60,7 +60,7 @@ void sensor_linha_calibrar(void) {
 	}
 		marcador_lateral_calibrar_ciclo();
 
-		HAL_Delay(50); // Pausa de 50ms a cada ciclo para que seja possivel mover o robo sobre a linha
+		HAL_Delay(DELAY_CALIBRACAO); // Pausa de DELAY_CALIBRACAO(ms) a cada ciclo para que seja possivel mover o robo sobre a linha
 	}
 
 	printf("Calibracao finalizada.\r\n");
@@ -74,7 +74,6 @@ void sensor_linha_calibrar(void) {
 	printf("---------------------------------------------------\r\n");
 
 
-	// Bip longo para indicar o fim
 	iu_bip_bloqueante(300);
 }
 

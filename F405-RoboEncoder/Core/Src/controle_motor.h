@@ -2,7 +2,7 @@
  * controle_motor.h
  *
  *  Created on: Jun 5, 2025
- *      Author: jlour
+ *      Author: Fábio Couto
  */
 
 #ifndef INC_CONTROLE_MOTOR_H_
