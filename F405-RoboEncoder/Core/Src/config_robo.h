@@ -48,14 +48,14 @@
 // =============================================================================
 // CONFIGURAÇÕES DO CONTROLE E MOTORES
 // =============================================================================
-// --- Potência e Velocidade ---
-#define POTENCIA_MAPEAMENTO 75
+
+// +++ CONSTANTES DE VELOCIDADE ALVO (em mm/s) +++
+#define VELOCIDADE_MAPEAMENTO_MMPS 1000
+#define VELOCIDADE_RETA_MMPS 2900 //2905 VELOCIDADE MÁXIMA COM 8.23V BATERIA
+#define VELOCIDADE_CORRIDA_MMPS 1200
+
 #define POTENCIA_MAX_MOTOR 255
-#define PERIODO_PWM_MOTOR 3359         // Período do registrador do TIM8 para PWM 50khz
-#define POTENCIA_RETA 245
-#define POTENCIA_CORRIDA 90
-// Passo de incremento/decremento da potência na rampa. Valor maior = aceleração/frenagem mais rápidas.
-#define PASSO_RAMPA_POTENCIA 10
+#define PERIODO_PWM_MOTOR 3359
 
 // --- PID MAPEAMENTO/CURVAS ---
 #define PID_SETPOINT 0
@@ -66,6 +66,14 @@
 // ---  PID EM RETAS ---
 #define PID_KP_RETA 190
 #define PID_KD_RETA 4500
+
+// +++ GANHOS PARA O PID DE VELOCIDADE +++
+#define PID_VEL_KP 100   // Valor inicial, necessita de ajuste
+#define PID_VEL_KI 20    // Valor inicial, necessita de ajuste
+#define PID_VEL_KD 0     // Geralmente não é necessário para velocidade
+#define PID_VEL_DIVISOR 1000
+#define PID_VEL_LIMITE_INTEGRAL 5000 // Limita o termo integral
+
 
 #define PID_DIVISOR 100
 /*
@@ -81,10 +89,10 @@
 #define TAMANHO_MAPA 50
 // Distância (em mm) a partir da qual uma reta é considerada "longa"
 // o suficiente para aplicar potência máxima.
-#define LIMIAR_DISTANCIA_RETA_LONGA 500
+#define LIMIAR_DISTANCIA_RETA_LONGA 800
 // Raio calculado a partir do qual se considera uma reta
-#define LIMIAR_CURVA_RETA 200
-#define PORCENTAGEM_PULSOS_EM_VRETA 50
+#define LIMIAR_CURVA_RETA 70
+#define PORCENTAGEM_PULSOS_EM_VRETA 65
 #define TEMPO_FRENAGEM_MS 50
 #define TEMPO_MAX_LINHA_PERDIDA_MS 100
 #define POS_LINHA_PERDIDA 250

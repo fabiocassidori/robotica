@@ -10,6 +10,7 @@
 #include "interface_usuario.h"
 #include "marcador_lateral.h"
 #include <stdio.h>
+#include <stdlib.h>
 
 static ADC_HandleTypeDef *g_hadc = NULL;
 static volatile uint16_t g_adc_buffer[8];
@@ -19,6 +20,7 @@ static uint16_t g_valores_maximos[NUM_SENSORES_LINHA + 1];
 
 static bool g_esta_na_linha = false;
 static int g_ultimo_erro = 0;
+static volatile int g_contador_linha_perdida_ms = 0;
 
 static uint16_t interpolar(uint16_t valor, uint16_t entrada_min, uint16_t entrada_max, uint16_t saida_min, uint16_t saida_max);
 static void ler_e_normalizar(uint16_t* valores_normalizados);
@@ -120,13 +122,6 @@ int sensor_linha_ler_posicao(void) {
 }
 
 
-bool sensor_linha_esta_na_linha(void) {
-    return g_esta_na_linha;
-}
-
-int sensor_linha_obter_ultimo_erro(void) {
-    return g_ultimo_erro;
-}
 
 static void ler_e_normalizar(uint16_t* valores_normalizados) {
 	for (uint8_t i = 1; i <= NUM_SENSORES_LINHA; i++) {
@@ -150,3 +145,30 @@ static uint16_t interpolar(uint16_t valor, uint16_t entrada_min, uint16_t entrad
 volatile uint16_t* sensor_linha_obter_buffer_dma(void) {
     return g_adc_buffer;
 }
+
+void sensor_linha_tick_1ms(void) {
+    // Decrementa o contador a cada milissegundo.
+    // Esta função será chamada pela interrupção do TIM6 em main.c
+    if (g_contador_linha_perdida_ms > 0) {
+        g_contador_linha_perdida_ms--;
+    }
+}
+
+bool sensor_linha_is_robo_fora_da_pista(int pos_mapeada) {
+    // Verifica se a posição atual está fora do limiar aceitável.
+    if (abs(pos_mapeada) > POS_LINHA_PERDIDA) {
+        // Se estiver fora, incrementa o contador. O incremento de 2, enquanto
+        // o decremento é 1, faz com que o contador suba efetivamente a cada 1ms
+        // que o robô permanece fora da linha.
+        if (g_contador_linha_perdida_ms < TEMPO_MAX_LINHA_PERDIDA_MS) {
+            g_contador_linha_perdida_ms += 2;
+        }
+    } else {
+        // Se o robô voltou para a linha, reseta o contador imediatamente.
+        g_contador_linha_perdida_ms = 0;
+    }
+
+    // Retorna verdadeiro se o contador ultrapassou o tempo máximo permitido.
+    return (g_contador_linha_perdida_ms >= TEMPO_MAX_LINHA_PERDIDA_MS);
+}
+

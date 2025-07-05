@@ -80,12 +80,15 @@ typedef enum {
 	ESTADO_FRENAGEM,
 	ESTADO_FORA_DA_PISTA,
     ESTADO_FINALIZADO,
+	ESTADO_AGUARDANDO_LOG_VELOCIDADE,
+	ESTADO_LOGANDO_VELOCIDADE,
     ESTADO_ERRO
 } EstadoRobo;
 
 static EstadoRobo g_estado_robo = ESTADO_INICIO;
-static int g_potencia_atual = 0;
-static int g_potencia_alvo = POTENCIA_MAPEAMENTO;
+
+// +++  VARIÁVEL PARA VELOCIDADE MÁXIMA +++
+static float g_velocidade_maxima_registrada_mmps = 0.0f;
 
 static int32_t g_dist_entrada_segmento_pulsos = 0;
 static uint8_t g_fim_corrida = 0;
@@ -96,7 +99,6 @@ volatile bool g_flag_loop_10ms = false;
 static volatile int g_contador_loop_lento = 0;
 static volatile int g_contador_frenagem_ms = 0;
 static volatile bool g_frenagem_realizada_no_segmento = false;
-static volatile int g_contador_linha_perdida_ms = 0;
 long range_posicao_sensor = SENSOR_POSICAO_MAX - SENSOR_POSICAO_MIN;
 long range_posicao_interpolada = POSICAO_ENTRADA_MAX - POSICAO_ENTRADA_MIN;
 
@@ -200,34 +202,21 @@ int main(void)
 //			printf("posicao mapeada: %d\n", pos_mapeada);
 //			HAL_Delay(200);
 
-	          if (g_estado_robo == ESTADO_CORRIDA ||
-	        	  g_estado_robo == ESTADO_FRENAGEM ||
-				  g_estado_robo == ESTADO_MAPEAMENTO) {
-
-				// Se o valor mapeado estiver nos extremos (ex: > 250 ou < -250), considera-se a linha perdida.
-				// A constante POS_LINHA_PERDIDA em config_robo.h deve ser ajustada para ~250.
-				if (abs(pos_mapeada) > POS_LINHA_PERDIDA) {
-					 if (g_contador_linha_perdida_ms < TEMPO_MAX_LINHA_PERDIDA_MS) {
-						 g_contador_linha_perdida_ms += 2;
-					 }
-				 } else {
-					 g_contador_linha_perdida_ms = 0;
-				 }
-
-				 if (g_contador_linha_perdida_ms >= TEMPO_MAX_LINHA_PERDIDA_MS) {
-					 g_estado_robo = ESTADO_FORA_DA_PISTA;
-					 motor_parar(true);
-					 iu_aguardar_botao();
-					 motor_parar(false);
-				 }
-			 }
-
 	          if (g_estado_robo == ESTADO_MAPEAMENTO ||
 				  g_estado_robo == ESTADO_CORRIDA ||
 				  g_estado_robo == ESTADO_ACELERANDO_RETA ||
 				  g_estado_robo == ESTADO_FRENAGEM) {
 
-	        	  executar_loop_rapido(pos_mapeada);
+	        	  //Verifica se saiu forda da pista
+	        	  if (sensor_linha_is_robo_fora_da_pista(pos_mapeada)) {
+					 // Se saiu, muda o estado e para os motores.
+					 // Nenhuma outra ação de controle de movimento será executada neste ciclo.
+					 g_estado_robo = ESTADO_FORA_DA_PISTA;
+					 motor_parar(true); // Este comando agora não será sobreposto
+				 } else {
+					 // Se NÃO saiu, executa a lógica normal de controle de velocidade e direção.
+					 executar_loop_rapido(pos_mapeada);
+				 }
 	          }
 	      }
 
@@ -270,8 +259,6 @@ int main(void)
 	  			  motor_parar(false);
 	  			  encoder_resetar_posicoes();
 	  			  g_fim_mapeamento = 0;
-	  			  g_potencia_alvo = POTENCIA_MAPEAMENTO;
-	  			  g_potencia_atual = 0;
 	  			  g_estado_robo = ESTADO_MAPEAMENTO;
 	  			  break;
 
@@ -303,9 +290,9 @@ int main(void)
 	  			  HAL_Delay(1000);
 	  			  motor_parar(false);
 	  			  mapa_resetar_para_corrida();
+	  			  // +++ RESETAR A VELOCIDADE MÁXIMA ANTES DA CORRIDA +++
+	  			  g_velocidade_maxima_registrada_mmps = 0.0f;
 	  			  g_dist_entrada_segmento_pulsos = 0;
-	  			  g_potencia_alvo = POTENCIA_CORRIDA;
-	  			  g_potencia_atual = 0;
 	  			  g_fim_corrida = 0;
 	  			  if (mapa_segmento_atual_e_reta_longa()) {
 					  g_estado_robo = ESTADO_ACELERANDO_RETA;
@@ -328,16 +315,36 @@ int main(void)
 					iu_atualizar();
 					iu_aguardar_botao();
 					HAL_Delay(400);
+					//Reseta a um estado inicial seguro
+					g_estado_robo = ESTADO_INICIO;
 
 			  break;
 	  		  case ESTADO_FINALIZADO:
 	  			   motor_parar(true);
 	  			   printf("Corrida finalizada!\r\n");
 	  			   iu_buzina_temporizada(1000);
-	  			   while(1) {
-	                     iu_atualizar(); // Continua atualizando a UI para o bip terminar
-	                 }
-	  			  break;
+	  			   HAL_Delay(500); // Pequena pausa
+				   g_estado_robo = ESTADO_AGUARDANDO_LOG_VELOCIDADE;
+				  break;
+				  // +++ LÓGICA PARA OS NOVOS ESTADOS +++
+			  case ESTADO_AGUARDANDO_LOG_VELOCIDADE:
+				  printf("Pressione para ver a velocidade maxima registrada.\r\n");
+				  iu_aguardar_botao();
+				  g_estado_robo = ESTADO_LOGANDO_VELOCIDADE;
+				  break;
+
+			  case ESTADO_LOGANDO_VELOCIDADE:
+				  // Imprime o valor da velocidade máxima (convertendo para int para simplicidade)
+				  printf("=============================================\r\n");
+				  printf("Velocidade Maxima Atingida: %d mm/s\r\n", (int)g_velocidade_maxima_registrada_mmps);
+				  printf("=============================================\r\n");
+				  iu_buzina_temporizada(1000);
+
+				  // Após logar, pode ir para um estado final ou reiniciar
+				  printf("Pressione o botao para reiniciar.\r\n");
+				  iu_aguardar_botao();
+				  g_estado_robo = ESTADO_INICIO; // Ou outro estado desejado
+				  break;
 
 	  		  case ESTADO_ERRO:
 	  			   motor_parar(true);
@@ -888,27 +895,43 @@ void executar_loop_rapido(int pos_mapeada) {
 
 	velocidade_atualizar();
 
-    int correcao = 0;
+	// +++ REGISTRO DA VELOCIDADE MÁXIMA +++
+	// Apenas registra quando estamos no modo de aceleração em reta
+	if (g_estado_robo == ESTADO_ACELERANDO_RETA) {
+		float velocidade_atual_mmps = velocidade_obter_media_mmps();
+		if (velocidade_atual_mmps > g_velocidade_maxima_registrada_mmps) {
+			g_velocidade_maxima_registrada_mmps = velocidade_atual_mmps;
+		}
+	}
+
+    int correcao_direcao  = 0;
+    float velocidade_alvo_mmps = 0;
 
     // ESTADO DE MAPEAMENTO
     if (g_estado_robo ==  ESTADO_MAPEAMENTO ) {
-    	g_potencia_alvo = POTENCIA_MAPEAMENTO;
-    	correcao = pid_calcular_correcao(pos_mapeada);
+    	velocidade_alvo_mmps  = VELOCIDADE_MAPEAMENTO_MMPS;
+    	correcao_direcao  = pid_calcular_correcao(pos_mapeada);
 
     }
 
     // ESTADO DE CORRIDA
 	else if (g_estado_robo == ESTADO_CORRIDA) {
-		g_potencia_alvo = POTENCIA_CORRIDA;
-		correcao = pid_calcular_correcao(pos_mapeada);
+		velocidade_alvo_mmps  = VELOCIDADE_CORRIDA_MMPS;
+		correcao_direcao = pid_calcular_correcao(pos_mapeada);
 	}
 
     // ESTADO DE ACELERAÇÃO EM RETA
 	else if (g_estado_robo == ESTADO_ACELERANDO_RETA) {
+		float velocidade_atual_mmps = velocidade_obter_media_mmps();
+		if (velocidade_atual_mmps > g_velocidade_maxima_registrada_mmps) {
+			g_velocidade_maxima_registrada_mmps = velocidade_atual_mmps;
+		}
+
+
 		// Define a potência alvo para máxima de reta
-		g_potencia_alvo = POTENCIA_RETA;
+		velocidade_alvo_mmps  = VELOCIDADE_RETA_MMPS;
 		// Usa o PID específico para retas
-		correcao = pid_calcular_correcao_customizada(pos_mapeada, PID_KP_RETA, PID_KD_RETA);
+		correcao_direcao = pid_calcular_correcao_customizada(pos_mapeada, PID_KP_RETA, PID_KD_RETA);
 
 		// Calcula a distância percorrida no segmento atual
 		int32_t dist_total_segmento_pulsos = mapa_obter_distancia_pulsos_segmento_atual();
@@ -935,18 +958,18 @@ void executar_loop_rapido(int pos_mapeada) {
 			  if (g_contador_frenagem_ms <= 0) {
 				  // Tempo de frenagem acabou, volta para o estado de corrida normal
 				  g_estado_robo = ESTADO_CORRIDA;
-				  g_potencia_alvo = POTENCIA_CORRIDA; // Prepara para a velocidade de curva
 			  } else {
 				  // Se ainda está freando, não faz mais nada neste ciclo
 				  return;
 			  }
 	}
 
-    // --- Controle de Potência (Comum a todos os estados de movimento) ---
-    // Apenas aplica potência se não estiver em modo de frenagem
+    // --- NOVO Controle de Potência (Malha Fechada) ---
     if (g_estado_robo != ESTADO_FRENAGEM) {
-        g_potencia_atual = velocidade_rampa_potencia(g_potencia_atual, g_potencia_alvo);
-        motor_definir_potencia(g_potencia_atual - correcao, g_potencia_atual + correcao);
+    	// 1. Calcula a potência base necessária para atingir a velocidade alvo
+		int potencia_base = velocidade_controlar_potencia(velocidade_alvo_mmps);
+
+        motor_definir_potencia(potencia_base - correcao_direcao, potencia_base + correcao_direcao);
     }
 }
 
@@ -997,6 +1020,7 @@ void executar_loop_lento(void) {
 
 			// A verificação de fim de corrida é feita aqui mesmo
             if (mapa_corrida_terminou(g_fim_corrida)) {
+            	motor_parar(true); // Para os motores ao cruzar a linha final
                 g_estado_robo = ESTADO_FINALIZADO;
             }
 
@@ -1021,10 +1045,10 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 			   g_contador_frenagem_ms--;
 		   }
 
-		//3. Decrementa o timer de linha perdida
-			if (g_contador_linha_perdida_ms > 0) {
-				g_contador_linha_perdida_ms--;
-			}
+		/*3. O timer para lógica de reconhecimento de linha perdida
+		   no arquivo sensor_linha.c*/
+		   sensor_linha_tick_1ms(); // Chama a função de tick do módulo do sensor
+
 		// 4. Usa um contador para acionar o loop lento a cada 10ms
 		g_contador_loop_lento++;
 		if (g_contador_loop_lento >= 10) {

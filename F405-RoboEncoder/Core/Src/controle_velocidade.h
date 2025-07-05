@@ -12,7 +12,7 @@
 
 void velocidade_inicializar(void);
 void velocidade_atualizar(void);
+int velocidade_controlar_potencia(float velocidade_alvo_mmps);
 float velocidade_obter_media_mmps(void);
-int velocidade_rampa_potencia(int potencia_atual, int potencia_alvo);
 
 #endif /* INC_CONTROLE_VELOCIDADE_H_ */
