@@ -80,6 +80,7 @@ typedef enum {
 	ESTADO_FRENAGEM,
 	ESTADO_FORA_DA_PISTA,
     ESTADO_FINALIZADO,
+	ESTADO_DESACELERANDO_FINAL,
 	ESTADO_AGUARDANDO_LOG_VELOCIDADE,
 	ESTADO_LOGANDO_VELOCIDADE,
     ESTADO_ERRO
@@ -320,12 +321,16 @@ int main(void)
 
 			  break;
 	  		  case ESTADO_FINALIZADO:
-	  			   motor_parar(true);
-	  			   printf("Corrida finalizada!\r\n");
-	  			   iu_buzina_temporizada(1000);
-	  			   HAL_Delay(500); // Pequena pausa
-				   g_estado_robo = ESTADO_AGUARDANDO_LOG_VELOCIDADE;
+				   g_estado_robo = ESTADO_DESACELERANDO_FINAL;
 				  break;
+
+	  		  case ESTADO_DESACELERANDO_FINAL:
+				// A lógica de controle de movimento para este estado
+				// será tratada no loop rápido.
+				// Aqui, apenas aguardamos a transição para o próximo estado,
+				// que será feita pelo loop rápido quando a velocidade for zero.
+				break;
+
 				  // +++ LÓGICA PARA OS NOVOS ESTADOS +++
 			  case ESTADO_AGUARDANDO_LOG_VELOCIDADE:
 				  printf("Pressione para ver a velocidade maxima registrada.\r\n");
@@ -963,6 +968,26 @@ void executar_loop_rapido(int pos_mapeada) {
 				  return;
 			  }
 	}
+    // +++ LÓGICA PARA O NOVO ESTADO DE DESACELERAÇÃO FINAL +++
+	else if (g_estado_robo == ESTADO_DESACELERANDO_FINAL) {
+	        // 1. Define o alvo de velocidade como ZERO.
+	        velocidade_alvo_mmps = 0.0f;
+
+	        // 2. Ignora a correção de direção para parar reto.
+	        correcao_direcao = 0;
+
+	        // 3. Verifica se o robô já está praticamente parado.
+	        if (velocidade_obter_media_mmps() < 5.0f) {
+	            motor_parar(true); // Desliga os motores completamente
+	            iu_buzina_temporizada(1000); // Emite o som de finalização
+
+	            // Transiciona para o próximo estado
+	            g_estado_robo = ESTADO_AGUARDANDO_LOG_VELOCIDADE;
+
+	            // Importante: retorna para não aplicar mais potência neste ciclo.
+	            return;
+	        }
+	    }
 
     // --- NOVO Controle de Potência (Malha Fechada) ---
     if (g_estado_robo != ESTADO_FRENAGEM) {

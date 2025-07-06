@@ -92,7 +92,7 @@
 #define LIMIAR_DISTANCIA_RETA_LONGA 800
 // Raio calculado a partir do qual se considera uma reta
 #define LIMIAR_CURVA_RETA 70
-#define PORCENTAGEM_PULSOS_EM_VRETA 65
+#define PORCENTAGEM_PULSOS_EM_VRETA 75
 #define TEMPO_FRENAGEM_MS 50
 #define TEMPO_MAX_LINHA_PERDIDA_MS 100
 #define POS_LINHA_PERDIDA 250
