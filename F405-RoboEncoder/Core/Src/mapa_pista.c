@@ -3,9 +3,11 @@
 #include "mapa_pista.h"
 #include "config_robo.h"
 #include "leitor_encoder.h"
+#include "mpu9250.h"
+#include "monitor_bateria.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include "monitor_bateria.h"
+#include <math.h>
 
 static int g_mapa_dist_esq[TAMANHO_MAPA];
 static int g_mapa_dist_dir[TAMANHO_MAPA];
@@ -17,6 +19,16 @@ static TipoSegmento g_mapa_tipo_segmento[TAMANHO_MAPA];
 
 static int g_segmentos_gravados = 0;
 static int g_ponteiro_segmento = 0;
+
+
+// --- VARIÁVEIS PARA O MAPEAMENTO CONTÍNUO ---
+static float g_log_distancia_mm[TAMANHO_LOG_PISTA];
+static float g_log_angulo_graus[TAMANHO_LOG_PISTA];
+static int g_log_indice = 0;
+static bool g_log_ativo = false;
+
+static float g_tabela_velocidade[TAMANHO_LOG_PISTA];
+
 
 void mapa_inicializar(void) {
     for (int i = 0; i < TAMANHO_MAPA; i++) {
@@ -97,36 +109,120 @@ int32_t mapa_obter_distancia_pulsos_segmento_atual(void) {
 
 void mapa_logar_dados_swo(void) {
 
-	// --- INÍCIO DA SEÇÃO DE TENSÃO DA BATERIA ---
-	// Obtém a tensão atual da bateria a partir do módulo de monitoramento.
-	float tensao_bateria = bateria_obter_tensao();
-	// Imprime a tensão formatada com duas casas decimais.
-	printf("Tensao da Bateria (estimada): %.2fV\r\n", tensao_bateria);
-	printf("----------------------------------------\r\n"); // Separador para clareza
-	// --- FIM DA SEÇÃO DE TENSÃO DA BATERIA ---
 
-    printf("Iniciando impressao dos dados via SWO...\r\n");
-    printf("Tipo Segmento (0=Curva, 1=Reta): ;");
-    for (int i = 0; i < g_segmentos_gravados; i++) printf("%d;", g_mapa_tipo_segmento[i]);
-    printf("\nMapesq: ;");
-    for (int i = 0; i < g_segmentos_gravados; i++) printf("%d;", g_mapa_dist_esq[i]);
-    printf("\nMapdir: ;");
-    for (int i = 0; i < g_segmentos_gravados; i++) printf("%d;", g_mapa_dist_dir[i]);
-    printf("\nMapa (media): ;");
-    for (int i = 0; i < g_segmentos_gravados; i++) printf("%d;", g_mapa_dist_media[i]);
-    printf("\nRmapa (raio): ;");
-    for (int i = 0; i < g_segmentos_gravados; i++) printf("%d;", g_mapa_raio[i]);
-    printf("\nDistancia Retas (cm): ;");
-        for (int i = 0; i < g_segmentos_gravados; i++) {
-            // Verifica se o segmento atual é uma reta
-            if (g_mapa_tipo_segmento[i] == SEGMENTO_RETA) {
-                // Converte a distância de mm para cm e imprime
-                int dist_cm = g_mapa_dist_media[i] / 10;
-                printf("%d;", dist_cm);
-            } else {
-                // Se for uma curva, imprime 0 para manter o formato
-                printf("0;");
-            }
+}
+
+void mapa_iniciar_log_pista(void) {
+    printf("Iniciando log da pista...\r\n");
+    for (int i = 0; i < TAMANHO_LOG_PISTA; i++) {
+        g_log_distancia_mm[i] = 0.0f;
+        g_log_angulo_graus[i] = 0.0f;
+    }
+    g_log_indice = 0;
+    g_log_ativo = true;
+}
+
+void mapa_parar_log_pista(void) {
+    printf("Log da pista finalizado. %d pontos gravados.\r\n", g_log_indice);
+    g_log_ativo = false;
+}
+
+void mapa_gravar_passo_log(void) {
+    if (!g_log_ativo || g_log_indice >= TAMANHO_LOG_PISTA) {
+        if (g_log_ativo) {
+            printf("ERRO: Log da pista cheio!\r\n");
+            g_log_ativo = false; // Para de gravar para evitar overflow
         }
-    printf("\nImpressao concluida.\r\n");
+        return;
+    }
+
+    // 1. Calcula a distância percorrida neste ciclo
+    int32_t delta_pulsos = encoder_obter_delta_pulsos_media();
+    float delta_dist_mm = (float)delta_pulsos * PULSOS_PARA_MM;
+
+    // 2. Calcula a variação de ângulo neste ciclo
+    // Variação Ângulo = Velocidade Angular * Tempo
+    float vel_angular_dps = mpu9250_obter_velocidade_angular_y(); // em graus/segundo
+    float delta_angulo_graus = vel_angular_dps * INTERVALO_LOOP_MPU_S; // (graus/s) * s = graus
+
+    // 3. Armazena os valores no log
+    g_log_distancia_mm[g_log_indice] = delta_dist_mm;
+    g_log_angulo_graus[g_log_indice] = delta_angulo_graus;
+
+    // 4. Avança para o próximo índice
+    g_log_indice++;
+}
+
+void mapa_logar_pista_swo(void) {
+    printf("--- Log Detalhado da Pista ---\r\n");
+    printf("Distancia (mm);");
+    for (int i = 0; i < g_log_indice; i++) {
+        printf("%.4f;", g_log_distancia_mm[i]);
+    }
+    printf("\n");
+
+    printf("Angulo (graus);");
+    for (int i = 0; i < g_log_indice; i++) {
+        printf("%.4f;", g_log_angulo_graus[i]);
+    }
+    printf("\n--------------------------------\r\n");
+}
+
+static float raio_para_velocidade(float raio_mm) {
+    // Garante que o raio não seja negativo
+    raio_mm = fabsf(raio_mm);
+
+    // Se o raio for muito grande, considera como reta e usa a velocidade máxima.
+    if (raio_mm > LIMIAR_CURVA_RETA) {
+        return VELOCIDADE_RETA_MMPS;
+    }
+
+    // Interpolação linear simples:
+    // Mapeia o raio (de 0 a RAIO_CONSIDERADO_RETA) para a velocidade (de VEL_MIN a VEL_MAX)
+    float fator = raio_mm / LIMIAR_CURVA_RETA;
+    float velocidade = VELOCIDADE_CORRIDA_MMPS + fator * (VELOCIDADE_RETA_MMPS - VELOCIDADE_CORRIDA_MMPS);
+
+    return velocidade;
+}
+
+void mapa_gerar_tabela_velocidade(void) {
+    printf("Gerando tabela de velocidade a partir de %d pontos...\r\n", g_log_indice);
+
+    for (int i = 0; i < g_log_indice; i++) {
+        float dist = g_log_distancia_mm[i];
+        float angulo_rad = g_log_angulo_graus[i] * (CONSTANTE_PI / 180.0f); // Converte para radianos
+
+        // Evita divisão por zero se o robô andou em linha perfeitamente reta
+        if (fabsf(angulo_rad) < 1e-6) {
+            // Se o ângulo é quase zero, o raio é infinito (reta)
+            g_tabela_velocidade[i] = VELOCIDADE_RETA_MMPS;
+        } else {
+            // Calcula o raio da curva para este passo
+            float raio_mm = fabsf(dist / angulo_rad);
+            // Converte o raio em uma velocidade alvo
+            g_tabela_velocidade[i] = raio_para_velocidade(raio_mm);
+        }
+    }
+
+    printf("Tabela de velocidade gerada com sucesso!\r\n");
+}
+
+/**
+ * @brief Retorna a velocidade alvo para um ponto específico do log.
+ * @param indice_log O índice do ponto na tabela.
+ * @return A velocidade alvo em mm/s.
+ */
+float mapa_obter_velocidade_alvo(int indice_log) {
+    if (indice_log >= 0 && indice_log < g_log_indice) {
+        return g_tabela_velocidade[indice_log];
+    }
+    return VELOCIDADE_CORRIDA_MMPS; // Retorna uma velocidade segura caso o índice seja inválido
+}
+
+/**
+ * @brief Retorna o número de pontos gravados no log.
+ * @return O tamanho do log.
+ */
+int mapa_obter_tamanho_log(void) {
+    return g_log_indice;
 }

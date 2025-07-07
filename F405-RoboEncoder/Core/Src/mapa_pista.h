@@ -26,4 +26,16 @@ bool mapa_segmento_atual_e_reta_longa(void);
 int32_t mapa_obter_distancia_pulsos_segmento_atual(void);
 void mapa_logar_dados_swo(void);
 
+// --- FUNÇÕES PARA MAPEAMENTO CONTÍNUO ---
+void mapa_iniciar_log_pista(void);
+void mapa_parar_log_pista(void);
+void mapa_gravar_passo_log(void);
+void mapa_logar_pista_swo(void);
+
+// --- NOVAS FUNÇÕES E DECLARAÇÕES ---
+void mapa_gerar_tabela_velocidade(void);
+float mapa_obter_velocidade_alvo(int indice_log);
+int mapa_obter_tamanho_log(void);
+
+
 #endif /* INC_MAPA_PISTA_H_ */

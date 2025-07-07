@@ -90,9 +90,15 @@
 #define TAMANHO_MAPA 50
 // Distância (em mm) a partir da qual uma reta é considerada "longa"
 // o suficiente para aplicar potência máxima.
+#define TAMANHO_LOG_PISTA 1500
+
+// Raio instantâneo (em mm), calculado a cada passo do log, acima do qual
+// consideramos que o robô está em uma reta para fins de velocidade máxima.
+#define RAIO_PARA_VEL_MAX_MM 2000.0f
 #define LIMIAR_DISTANCIA_RETA_LONGA 800
 // Raio calculado a partir do qual se considera uma reta
 #define LIMIAR_CURVA_RETA 70
+
 #define PORCENTAGEM_PULSOS_EM_VRETA 75
 #define TEMPO_FRENAGEM_MS 50
 #define TEMPO_MAX_LINHA_PERDIDA_MS 100
@@ -106,7 +112,7 @@
  * os valores de variância do Giroscópio e Acelerômetro.
  * Caso for 0, ignora o cálculo e vai direto para a calibração dos sensores de linha.
  */
-#define CALCULAR_VARIANCIA_GYRO_ACELEROMETRO 0
+#define CALCULAR_VARIANCIA_GYRO_ACELEROMETRO 1
 
 // =============================================================================
 // CONFIGURAÇÕES DA BATERIA

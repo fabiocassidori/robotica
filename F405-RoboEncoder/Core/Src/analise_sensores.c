@@ -30,7 +30,7 @@ static float calcular_variancia(float* dados, float media, int tamanho) {
         float diff = dados[i] - media;
         soma_diff_quadrada += diff * diff;
     }
-    return soma_diff_quadrada / (tamanho - 1);
+    return soma_diff_quadrada / (tamanho - 1);// Variância amostral
 }
 
 void analisar_variancia_sensores(void) {

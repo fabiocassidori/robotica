@@ -13,10 +13,13 @@
 #define RAD_PARA_GRAUS 57.295779513f
 
 static SPI_HandleTypeDef *g_hspi;
+
 static float g_sensibilidade_giro;
 static float g_sensibilidade_acel;
+
 static int16_t g_acel_raw_x, g_acel_raw_z;
 static int16_t g_giro_raw_y;
+
 static float g_offset_giro_y = 0.0f;
 
 // Funções de comunicação SPI

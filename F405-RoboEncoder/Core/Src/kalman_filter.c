@@ -13,8 +13,8 @@ static float A_kalman[2][2];
 static float B_kalman[2];
 
 // Covariâncias de Ruído (Valores obtidos na análise)
-static const float U = 0.01902881f; // Incerteza do giroscópio
-static const float W = 0.10482820f; // Incerteza do acelerômetro
+static const float U = 0.01953728f; // Incerteza do giroscópio
+static const float W = 0.08160052f; // Incerteza do acelerômetro
 
 // Variáveis de Estado do Filtro
 static float P[2][2] = {{1.0f, 0.0f}, {0.0f, 1.0f}};

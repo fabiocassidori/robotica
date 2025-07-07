@@ -217,12 +217,12 @@ int main(void)
 //	  printf("posicao: %d\n", pos_linha);
 //	  printf("esta na linha: %s\n", esta_na_linha ? "true" : "false");//
 
+
 	  // --- LOOP RÁPIDO (1ms) ---
 	      if (g_flag_loop_1ms) {
 	        g_flag_loop_1ms = false;
 
 	        encoder_atualizar_posicoes();
-
 			// A lógica de leitura e mapeamento deve estar aqui para a verificação
 			int pos_bruta = sensor_linha_ler_posicao();
 //			printf("posicao bruta: %d\n", pos_bruta);
@@ -255,6 +255,12 @@ int main(void)
 
 			  // Tarefas de média prioridade executadas a 250 Hz
 			  mpu9250_ler_sensores();
+
+			  velocidade_atualizar();
+
+			  if (g_estado_robo == ESTADO_MAPEAMENTO) {
+			       mapa_gravar_passo_log();
+			  }
 			  //float omega = mpu9250_obter_velocidade_angular_y();
 			  //float theta = mpu9250_obter_angulo_acelerometro();
 			  //float angulo_filtrado = kalman_atualizar(omega, theta);
@@ -301,6 +307,7 @@ int main(void)
 	  			  HAL_Delay(3000);
 	  			  motor_parar(false);
 	  			  encoder_resetar_posicoes();
+	  			  mapa_iniciar_log_pista();
 	  			  g_fim_mapeamento = 0;
 	  			  g_estado_robo = ESTADO_MAPEAMENTO;
 	  			  break;
@@ -308,6 +315,7 @@ int main(void)
 	  		  case ESTADO_MAPEAMENTO:
 	  			    if (g_fim_mapeamento >= 2) {
 	  			        motor_parar(true);
+	  			        mapa_parar_log_pista();
 	  			        printf("Mapeamento concluido.\r\n");
 	  			        iu_buzina_temporizada(300);
 	  			        g_estado_robo = ESTADO_AGUARDANDO_LOG;
@@ -322,7 +330,12 @@ int main(void)
 
 	  		  case ESTADO_LOGANDO:
 	  			  mapa_logar_dados_swo();
-	  			  iu_buzina_temporizada(500);
+	  			  mapa_logar_pista_swo();
+
+	  			  // Processa o log que acabamos de fazer e cria o plano de velocidade
+				  mapa_gerar_tabela_velocidade();
+
+				  iu_buzina_temporizada(500);
 	  			  g_estado_robo = ESTADO_AGUARDANDO_CORRIDA;
 	  			  break;
 
@@ -972,6 +985,7 @@ void executar_loop_rapido(int pos_mapeada) {
     if (g_estado_robo ==  ESTADO_MAPEAMENTO ) {
     	velocidade_alvo_mmps  = VELOCIDADE_MAPEAMENTO_MMPS;
     	correcao_direcao  = pid_calcular_correcao(pos_mapeada);
+    	mapa_gravar_passo_log();
 
     }
 
