@@ -21,6 +21,7 @@
 #define CICLOS_CALIBRACAO 100
 #define DELAY_CALIBRACAO 50
 #define INTERVALO_LOOP_CONTROLE_S 0.001f  // Intervalo em segundos
+#define INTERVALO_LOOP_MPU_S      0.004f
 
 // --- Física do Robô ---
 #define DIAMETRO_RODA_MM 22.2f
@@ -96,6 +97,16 @@
 #define TEMPO_FRENAGEM_MS 50
 #define TEMPO_MAX_LINHA_PERDIDA_MS 100
 #define POS_LINHA_PERDIDA 250
+
+// =============================================================================
+// CONFIGURAÇÕES DO GYROSCOPIO E ACELEROMETRO
+// =============================================================================
+/*
+ * Caso for 1, habilita na inicialização a rotina para calcular e imprimir
+ * os valores de variância do Giroscópio e Acelerômetro.
+ * Caso for 0, ignora o cálculo e vai direto para a calibração dos sensores de linha.
+ */
+#define CALCULAR_VARIANCIA_GYRO_ACELEROMETRO 0
 
 // =============================================================================
 // CONFIGURAÇÕES DA BATERIA
