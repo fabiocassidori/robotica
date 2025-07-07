@@ -2,10 +2,9 @@
  * interface_usuario.c
  *
  *  Created on: Jun 5, 2025
- *      Author: jlour
+ *      Author: Fábio Couto
  */
 
-// Core/Src/interface_usuario.c (Versão Corrigida e Robusta)
 
 #include "interface_usuario.h"
 #include "main.h"
@@ -52,7 +51,7 @@ void iu_definir_buzina_persistente(bool ligar) {
     g_buzina_persistente_ativa = ligar;
 }
 
-// CORREÇÃO PRINCIPAL: Esta função é agora a ÚNICA que controla o pino da buzina.
+// Função que controla o pino da buzina.
 // Ela centraliza a decisão e evita conflitos.
 void iu_atualizar(void) {
     bool deve_estar_ligada = false;

@@ -1,11 +1,10 @@
 /*
- * marcador_lateral.c
- *
- * VERSÃO FINAL COM LÓGICA DE ACUMULADOR DE EVENTO PARA DETECÇÃO ROBUSTA DE INTERSECÇÕES
+ * LÓGICA DE CALIBRAÇÃO E DETECÇÃO INTERSECÇÕES
  */
 
 #include "marcador_lateral.h"
 #include "config_robo.h"
+#include <stdio.h> // Incluído para depuração, se necessário
 
 // --- NOVA MÁQUINA DE ESTADOS E ACUMULADOR ---
 typedef enum {
@@ -26,7 +25,7 @@ static uint16_t g_calib_min_esq = ADC_VALOR_MAXIMO, g_calib_max_esq = 0;
 static uint16_t g_limiar_calibrado_dir = LIMIAR_SENSOR_LATERAL;
 static uint16_t g_limiar_calibrado_esq = LIMIAR_SENSOR_LATERAL;
 
-// Funções de inicialização e calibração não precisam de mudanças e podem ser mantidas
+// Funções de inicialização e reset não precisam de mudanças
 void marcador_lateral_resetar_calibracao(void) {
     g_calib_min_dir = (uint16_t)ADC_VALOR_MAXIMO; g_calib_max_dir = 0;
     g_calib_min_esq = (uint16_t)ADC_VALOR_MAXIMO; g_calib_max_esq = 0;
@@ -41,23 +40,78 @@ void marcador_lateral_inicializar(volatile uint16_t* adc_dma_buffer) {
     g_tipo_marcador_acumulado = 0;
 }
 
-void marcador_lateral_calibrar_ciclo(void) { /* ...código inalterado... */ }
-void marcador_lateral_finalizar_calibracao(void) { /* ...código inalterado... */ }
 
-
-// --- FUNÇÃO DE VERIFICAÇÃO COMPLETAMENTE REESCRITA COM A NOVA LÓGICA ---
-TipoMarcador marcador_lateral_verificar(void) {
+/**
+ * @brief Executa uma única iteração de leitura para a calibração.
+ * Esta função deve ser chamada repetidamente enquanto o robô se move
+ * sobre as superfícies branca e preta da pista.
+ */
+void marcador_lateral_calibrar_ciclo(void) {
     if (!g_adc_buffer) {
-        return MARCADOR_NENHUM;
+        return;
     }
 
-    bool dir_agora = (g_adc_buffer[0] < g_limiar_calibrado_dir);
-    bool esq_agora = (g_adc_buffer[7] < g_limiar_calibrado_esq);
+    // Lê os valores brutos atuais dos sensores laterais a partir do buffer DMA
+    // O sensor direito está no índice 0 e o esquerdo no índice 7 do buffer ADC
+    uint16_t valor_atual_dir = g_adc_buffer[0];
+    uint16_t valor_atual_esq = g_adc_buffer[7];
+
+    // Atualiza os valores mínimo e máximo para o sensor direito
+    if (valor_atual_dir < g_calib_min_dir) {
+        g_calib_min_dir = valor_atual_dir;
+    }
+    if (valor_atual_dir > g_calib_max_dir) {
+        g_calib_max_dir = valor_atual_dir;
+    }
+
+    // Atualiza os valores mínimo e máximo para o sensor esquerdo
+    if (valor_atual_esq < g_calib_min_esq) {
+        g_calib_min_esq = valor_atual_esq;
+    }
+    if (valor_atual_esq > g_calib_max_esq) {
+        g_calib_max_esq = valor_atual_esq;
+    }
+}
+
+/**
+ * @brief Finaliza o processo de calibração.
+ * Calcula os limiares finais com base nos valores min/max coletados.
+ */
+void marcador_lateral_finalizar_calibracao(void) {
+    // Calcula o limiar para o sensor direito como o ponto médio
+    // entre a leitura mínima (branco) e máxima (preto).
+    if (g_calib_max_dir > g_calib_min_dir) {
+        g_limiar_calibrado_dir = g_calib_min_dir + (g_calib_max_dir - g_calib_min_dir) / 2;
+    } else {
+        // Se a calibração não for eficaz (min e max iguais), recorre ao valor padrão.
+        g_limiar_calibrado_dir = LIMIAR_SENSOR_LATERAL;
+    }
+
+    // Faz o mesmo para o sensor esquerdo.
+    if (g_calib_max_esq > g_calib_min_esq) {
+        g_limiar_calibrado_esq = g_calib_min_esq + (g_calib_max_esq - g_calib_min_esq) / 2;
+    } else {
+        g_limiar_calibrado_esq = LIMIAR_SENSOR_LATERAL;
+    }
+
+     //Log dos valores calibrados para depuração
+     printf("Calib. Lateral Esq Min/Max/Limiar: %u/%u/%u\r\n", g_calib_min_esq, g_calib_max_esq, g_limiar_calibrado_esq);
+     printf("Calib. Lateral Dir Min/Max/Limiar: %u/%u/%u\r\n", g_calib_min_dir, g_calib_max_dir, g_limiar_calibrado_dir);
+}
+
+
+TipoMarcador marcador_lateral_verificar(void) {
+
+	if (!g_adc_buffer) {
+        return MARCADOR_NENHUM;
+    }
+	 bool dir_agora = (g_adc_buffer[0] < g_limiar_calibrado_dir);
+	 bool esq_agora = (g_adc_buffer[7] < g_limiar_calibrado_esq);
 
     int estado_leitura_atual = 0;
     if (esq_agora) estado_leitura_atual |= 1; // Bit 0 para a esquerda
     if (dir_agora) estado_leitura_atual |= 2; // Bit 1 para a direita
-    // Resultado: 0=Nenhum, 1=Esquerda, 2=Direita, 3=Ambos
+//  Resultado: 0=Nenhum, 1=Esquerda, 2=Direita, 3=Ambos
 
     TipoMarcador marcador_para_retorno = MARCADOR_NENHUM;
 
@@ -100,4 +154,9 @@ TipoMarcador marcador_lateral_verificar(void) {
     }
 
     return marcador_para_retorno;
+}
+
+void depuracao_sensores_laterais(){
+	printf("Sensores Laterais | Esq: %u, Dir: %u\r\n", g_adc_buffer[7], g_adc_buffer[0]);
+	HAL_Delay(500);
 }
