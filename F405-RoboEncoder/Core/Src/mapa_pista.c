@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "monitor_bateria.h"
+#include "mpu9250.h"
 
 static int g_mapa_dist_esq[TAMANHO_MAPA];
 static int g_mapa_dist_dir[TAMANHO_MAPA];
@@ -17,6 +18,23 @@ static TipoSegmento g_mapa_tipo_segmento[TAMANHO_MAPA];
 
 static int g_segmentos_gravados = 0;
 static int g_ponteiro_segmento = 0;
+
+// --- VARIÁVEIS PARA O MAPEAMENTO CONTÍNUO ---
+static float g_log_distancia_mm[TAMANHO_LOG_PISTA];
+static float g_log_angulo_graus[TAMANHO_LOG_PISTA];
+static int g_log_indice = 0;
+static bool g_log_ativo = false;
+
+//--- VARIÁVEIS PARA LOG DE DEBUG --
+
+// Buffer para armazenar os pontos de dados de debug
+static LogDebugDataPoint g_log_debug_buffer[TAMANHO_LOG_PISTA];
+
+// Flag para controlar se o log de debug está ativo
+static bool g_log_debug_ativo = false;
+
+
+
 
 void mapa_inicializar(void) {
     for (int i = 0; i < TAMANHO_MAPA; i++) {
@@ -129,4 +147,133 @@ void mapa_logar_dados_swo(void) {
             }
         }
     printf("\nImpressao concluida.\r\n");
+
+}
+
+// --- FUNÇÕES MAPEAMENTO CONTÍNUO ---
+
+/**
+ * @brief Prepara o sistema para iniciar a gravação do log da pista.
+ */
+void mapa_iniciar_log_pista(void) {
+    printf("Iniciando log da pista...\r\n");
+    for (int i = 0; i < TAMANHO_LOG_PISTA; i++) {
+        g_log_distancia_mm[i] = 0.0f;
+        g_log_angulo_graus[i] = 0.0f;
+    }
+    g_log_indice = 0;
+    g_log_ativo = true;
+}
+
+/**
+ * @brief Para a gravação do log da pista.
+ */
+void mapa_parar_log_pista(void) {
+    printf("Log da pista finalizado. %d pontos gravados.\r\n", g_log_indice);
+    g_log_ativo = false;
+}
+
+/**
+ * @brief Grava um único passo (distância e ângulo) no log.
+ * Deve ser chamada a cada ciclo do loop de controle rápido (1ms).
+ */
+void mapa_gravar_passo_log(void) {
+    if (!g_log_ativo || g_log_indice >= TAMANHO_LOG_PISTA) {
+        if (g_log_ativo) {
+            printf("ERRO: Log da pista cheio!\r\n");
+            g_log_ativo = false; // Para de gravar para evitar overflow
+        }
+        return;
+    }
+
+    // 1. Calcula a distância percorrida neste ciclo
+    int32_t delta_pulsos = encoder_obter_delta_pulsos_media();
+    float delta_dist_mm = (float)delta_pulsos * PULSOS_PARA_MM;
+
+    // 2. Calcula a variação de ângulo neste ciclo
+    // Variação Ângulo = Velocidade Angular * Tempo
+    float vel_angular_dps = mpu9250_obter_velocidade_angular_y(); // em graus/segundo
+    float delta_angulo_graus = vel_angular_dps * INTERVALO_LOOP_CONTROLE_S; // (graus/s) * s = graus
+
+    // 3. Armazena os valores no log
+    g_log_distancia_mm[g_log_indice] = delta_dist_mm;
+    g_log_angulo_graus[g_log_indice] = delta_angulo_graus;
+
+    // 4. Avança para o próximo índice
+    g_log_indice++;
+}
+
+/**
+ * @brief Imprime o log detalhado da pista via SWO.
+ */
+void mapa_logar_pista_swo(void) {
+    printf("--- Log Detalhado da Pista ---\r\n");
+    printf("Distancia (mm);");
+    for (int i = 0; i < g_log_indice; i++) {
+        printf("%.4f;", g_log_distancia_mm[i]);
+    }
+    printf("\n");
+
+    printf("Angulo (graus);");
+    for (int i = 0; i < g_log_indice; i++) {
+        printf("%.4f;", g_log_angulo_graus[i]);
+    }
+    printf("\n--------------------------------\r\n");
+}
+
+//--- Funcoes para log da pista
+
+int mapa_obter_segmento_atual(void) {
+	// g_ponteiro_segmento já contém o segmento atual durante a corrida,
+	// mas durante o mapeamento, o segmento atual é g_segmentos_gravados.
+	return g_segmentos_gravados;
+}
+
+void mapa_iniciar_log_debug(void) {
+	printf("Log de debug do PID ativado para o mapeamento.\r\n");
+	g_log_indice = 0;
+	g_log_debug_ativo = true;
+}
+
+void mapa_parar_log_debug(void) {
+	if (g_log_debug_ativo) {
+	        printf("Log de debug finalizado. %d pontos gravados.\r\n", g_log_indice);
+	        g_log_debug_ativo = false;
+	}
+}
+
+void mapa_gravar_ponto_debug(const LogDebugDataPoint* dados) {
+    if (!g_log_debug_ativo || g_log_indice >= TAMANHO_LOG_PISTA) {
+        if (g_log_debug_ativo) {
+            printf("ERRO: Buffer de log de debug cheio!\r\n");
+            g_log_debug_ativo = false; // Para de gravar para evitar overflow
+        }
+        return;
+    }
+
+    // Copia os dados para o buffer de log
+    g_log_debug_buffer[g_log_indice] = *dados;
+    g_log_indice++;
+}
+
+void mapa_logar_dados_debug_swo(void) {
+	if (g_log_indice == 0) {
+	        printf("Nenhum dado de debug foi logado.\r\n");
+	        return;
+	}
+
+	    printf("--- Log de Debug do PID (CSV) ---\r\n");
+	    printf("Tempo(ms);Segmento;ErroPos;CorrecaoPID;VelReal(mm/s);PotBase\r\n");
+
+	    for (int i = 0; i < g_log_indice; i++) {
+	        // CORREÇÃO: Acessando os campos corretos da estrutura no buffer
+	        printf("%d;%d;%d;%d;%d;%d\r\n",
+	               i,
+	               g_log_debug_buffer[i].segmento_pista,
+	               g_log_debug_buffer[i].erro_posicao,
+	               g_log_debug_buffer[i].correcao_pid,
+	               (int)g_log_debug_buffer[i].velocidade_real,
+	               g_log_debug_buffer[i].potencia_base);
+	    }
+	    printf("--- Fim do Log de Debug ---\r\n");
 }

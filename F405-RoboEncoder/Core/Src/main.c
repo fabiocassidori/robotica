@@ -37,6 +37,9 @@
 #include "mapa_pista.h"
 #include "monitor_bateria.h"
 #include "interface_usuario.h"
+#include "analise_sensores.h"
+#include "mpu9250.h"
+#include "kalman_filter.h"
 
 /* USER CODE END Includes */
 
@@ -59,6 +62,8 @@
 ADC_HandleTypeDef hadc1;
 ADC_HandleTypeDef hadc2;
 DMA_HandleTypeDef hdma_adc1;
+
+SPI_HandleTypeDef hspi3;
 
 TIM_HandleTypeDef htim3;
 TIM_HandleTypeDef htim4;
@@ -116,6 +121,7 @@ static void MX_TIM8_Init(void);
 static void MX_TIM6_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_TIM4_Init(void);
+static void MX_SPI3_Init(void);
 /* USER CODE BEGIN PFP */
 
 void executar_loop_rapido(int pos_mapeada);
@@ -163,6 +169,7 @@ int main(void)
   MX_TIM6_Init();
   MX_TIM3_Init();
   MX_TIM4_Init();
+  MX_SPI3_Init();
   /* USER CODE BEGIN 2 */
 
     iu_inicializar();
@@ -177,6 +184,25 @@ int main(void)
 
     motor_parar(true);
     HAL_TIM_Base_Start_IT(&htim6);
+
+    kalman_inicializar(INTERVALO_LOOP_CONTROLE_S);
+
+    if (mpu9250_inicializar(&hspi3) != MPU9250_OK) {
+          printf("Erro ao inicializar MPU9250!\r\n");
+          Error_Handler();
+    }else{
+    	printf("MPU inicializado corretamente!");
+		//só entra nesta função se setar como 1
+		if(CALCULAR_VARIANCIA_GYRO_ACELEROMETRO){
+			iu_aguardar_botao();
+			analisar_variancia_sensores();
+			iu_bip_bloqueante(50);//beep - finalizou calculo da variancia
+		}else{
+			printf("Calculo inicial da variancia do MPU não selecionado");
+		}
+    }
+
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -185,7 +211,7 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  encoder_atualizar_posicoes();
+
 
 //	  bool esta_na_linha = sensor_linha_esta_na_linha();
 //	  int pos_linha = sensor_linha_ler_posicao();
@@ -196,6 +222,11 @@ int main(void)
 	  // --- LOOP RÁPIDO (1ms) ---
 	      if (g_flag_loop_1ms) {
 	        g_flag_loop_1ms = false;
+
+
+	        mpu9250_ler_sensores();
+	        encoder_atualizar_posicoes();
+
 			// A lógica de leitura e mapeamento deve estar aqui para a verificação
 			int pos_bruta = sensor_linha_ler_posicao();
 //			printf("posicao bruta: %d\n", pos_bruta);
@@ -259,6 +290,8 @@ int main(void)
 	  			  HAL_Delay(3000);
 	  			  motor_parar(false);
 	  			  encoder_resetar_posicoes();
+	  			  mapa_iniciar_log_pista(); //NOVA FUNCAO
+	  			  mapa_iniciar_log_debug();
 	  			  g_fim_mapeamento = 0;
 	  			  g_estado_robo = ESTADO_MAPEAMENTO;
 	  			  break;
@@ -266,6 +299,8 @@ int main(void)
 	  		  case ESTADO_MAPEAMENTO:
 	  			    if (g_fim_mapeamento >= 2) {
 	  			        motor_parar(true);
+	  			        mapa_parar_log_pista();//NOVA FUNÇÃO
+	  			        mapa_parar_log_debug();
 	  			        printf("Mapeamento concluido.\r\n");
 	  			        iu_buzina_temporizada(300);
 	  			        g_estado_robo = ESTADO_AGUARDANDO_LOG;
@@ -273,13 +308,20 @@ int main(void)
 	  			  break;
 
 	  		  case ESTADO_AGUARDANDO_LOG:
-	  			  printf("Pressione para imprimir o mapa via SWO.\r\n");
+	  			printf("Pressione para imprimir LOGS (Mapa e Debug PID) via SWO.\r\n");
 	  			  iu_aguardar_botao();
 	  			  g_estado_robo = ESTADO_LOGANDO;
 	  			  break;
 
 	  		  case ESTADO_LOGANDO:
-	  			  mapa_logar_dados_swo();
+	  			// ++ Imprime os dois logs em sequência ++
+					printf("\r\n========================================\r\n");
+					printf("--- LOG DO MAPA DA PISTA ---\r\n");
+					mapa_logar_pista_swo();
+
+					printf("\r\n========================================\r\n");
+					mapa_logar_dados_debug_swo(); // Imprime o novo log de debug
+					printf("========================================\r\n");
 	  			  iu_buzina_temporizada(500);
 	  			  g_estado_robo = ESTADO_AGUARDANDO_CORRIDA;
 	  			  break;
@@ -580,6 +622,44 @@ static void MX_ADC2_Init(void)
 }
 
 /**
+  * @brief SPI3 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_SPI3_Init(void)
+{
+
+  /* USER CODE BEGIN SPI3_Init 0 */
+
+  /* USER CODE END SPI3_Init 0 */
+
+  /* USER CODE BEGIN SPI3_Init 1 */
+
+  /* USER CODE END SPI3_Init 1 */
+  /* SPI3 parameter configuration*/
+  hspi3.Instance = SPI3;
+  hspi3.Init.Mode = SPI_MODE_MASTER;
+  hspi3.Init.Direction = SPI_DIRECTION_2LINES;
+  hspi3.Init.DataSize = SPI_DATASIZE_8BIT;
+  hspi3.Init.CLKPolarity = SPI_POLARITY_HIGH;
+  hspi3.Init.CLKPhase = SPI_PHASE_2EDGE;
+  hspi3.Init.NSS = SPI_NSS_SOFT;
+  hspi3.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
+  hspi3.Init.FirstBit = SPI_FIRSTBIT_MSB;
+  hspi3.Init.TIMode = SPI_TIMODE_DISABLE;
+  hspi3.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
+  hspi3.Init.CRCPolynomial = 10;
+  if (HAL_SPI_Init(&hspi3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN SPI3_Init 2 */
+
+  /* USER CODE END SPI3_Init 2 */
+
+}
+
+/**
   * @brief TIM3 Initialization Function
   * @param None
   * @retval None
@@ -738,7 +818,7 @@ static void MX_TIM8_Init(void)
   htim8.Instance = TIM8;
   htim8.Init.Prescaler = 0;
   htim8.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim8.Init.Period = PERIODO_PWM_MOTOR;
+  htim8.Init.Period = 5599;
   htim8.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim8.Init.RepetitionCounter = 0;
   htim8.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
@@ -842,6 +922,9 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOA, AIN2VENT_Pin|AIN1VENT_Pin|STBYVENT_Pin|BIN1VENT_Pin
                           |BIN2VENT_Pin, GPIO_PIN_RESET);
 
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(NSS_GPIO_Port, NSS_Pin, GPIO_PIN_SET);
+
   /*Configure GPIO pin : BOTAO_Pin */
   GPIO_InitStruct.Pin = BOTAO_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
@@ -858,37 +941,13 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pins : AIN2VENT_Pin AIN1VENT_Pin STBYVENT_Pin BIN1VENT_Pin
-                           BIN2VENT_Pin */
+                           BIN2VENT_Pin NSS_Pin */
   GPIO_InitStruct.Pin = AIN2VENT_Pin|AIN1VENT_Pin|STBYVENT_Pin|BIN1VENT_Pin
-                          |BIN2VENT_Pin;
+                          |BIN2VENT_Pin|NSS_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : NSS_Pin */
-  GPIO_InitStruct.Pin = NSS_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
-  GPIO_InitStruct.Alternate = GPIO_AF6_SPI3;
-  HAL_GPIO_Init(NSS_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : SCK_Pin */
-  GPIO_InitStruct.Pin = SCK_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  GPIO_InitStruct.Alternate = GPIO_AF6_SPI3;
-  HAL_GPIO_Init(SCK_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : MISO_Pin MOSI_Pin */
-  GPIO_InitStruct.Pin = MISO_Pin|MOSI_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
-  GPIO_InitStruct.Alternate = GPIO_AF6_SPI3;
-  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
@@ -899,6 +958,11 @@ static void MX_GPIO_Init(void)
 void executar_loop_rapido(int pos_mapeada) {
 
 	velocidade_atualizar();
+
+	//Foi colocado aqui pois a ordem é relevante
+	if (g_estado_robo == ESTADO_MAPEAMENTO) {
+			mapa_gravar_passo_log();
+		}
 
 	// +++ REGISTRO DA VELOCIDADE MÁXIMA +++
 	// Apenas registra quando estamos no modo de aceleração em reta
@@ -911,6 +975,7 @@ void executar_loop_rapido(int pos_mapeada) {
 
     int correcao_direcao  = 0;
     float velocidade_alvo_mmps = 0;
+    int potencia_base = 0;
 
     // ESTADO DE MAPEAMENTO
     if (g_estado_robo ==  ESTADO_MAPEAMENTO ) {
@@ -960,13 +1025,13 @@ void executar_loop_rapido(int pos_mapeada) {
 	// ESTADO DE FRENAGEM: Lógica para controlar a duração da frenagem
 	else if (g_estado_robo == ESTADO_FRENAGEM) {
 	   motor_frear(); // Mantém os freios acionados
-			  if (g_contador_frenagem_ms <= 0) {
-				  // Tempo de frenagem acabou, volta para o estado de corrida normal
-				  g_estado_robo = ESTADO_CORRIDA;
-			  } else {
-				  // Se ainda está freando, não faz mais nada neste ciclo
-				  return;
-			  }
+	  if (g_contador_frenagem_ms <= 0) {
+		  // Tempo de frenagem acabou, volta para o estado de corrida normal
+		  g_estado_robo = ESTADO_CORRIDA;
+	  } else {
+		  // Se ainda está freando, não faz mais nada neste ciclo
+		  return;
+	  }
 	}
     // +++ LÓGICA PARA O NOVO ESTADO DE DESACELERAÇÃO FINAL +++
 	else if (g_estado_robo == ESTADO_DESACELERANDO_FINAL) {
@@ -993,9 +1058,20 @@ void executar_loop_rapido(int pos_mapeada) {
     if (g_estado_robo != ESTADO_FRENAGEM) {
     	// 1. Calcula a potência base necessária para atingir a velocidade alvo
 		int potencia_base = velocidade_controlar_potencia(velocidade_alvo_mmps);
-
         motor_definir_potencia(potencia_base - correcao_direcao, potencia_base + correcao_direcao);
     }
+
+    // ++ ALTERADO: Grava os dados de debug APENAS durante o mapeamento ++
+    if (g_estado_robo == ESTADO_MAPEAMENTO) {
+            LogDebugDataPoint dados_atuais;
+            dados_atuais.segmento_pista = mapa_obter_segmento_atual();
+            dados_atuais.erro_posicao = pos_mapeada;
+            dados_atuais.correcao_pid = correcao_direcao;
+            dados_atuais.potencia_base = potencia_base; // Agora a variável está no escopo
+            dados_atuais.velocidade_real = velocidade_obter_media_mmps();
+
+            mapa_gravar_ponto_debug(&dados_atuais);
+        }
 }
 
 

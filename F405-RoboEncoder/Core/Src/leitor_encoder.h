@@ -16,5 +16,6 @@ void encoder_atualizar_posicoes(void);
 int32_t encoder_obter_posicao_esquerda(void);
 int32_t encoder_obter_posicao_direita(void);
 void encoder_resetar_posicoes(void);
+int32_t encoder_obter_delta_pulsos_media(void);
 
 #endif /* INC_LEITOR_ENCODER_H_ */

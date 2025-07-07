@@ -50,7 +50,7 @@
 // =============================================================================
 
 // +++ CONSTANTES DE VELOCIDADE ALVO (em mm/s) +++
-#define VELOCIDADE_MAPEAMENTO_MMPS 1000
+#define VELOCIDADE_MAPEAMENTO_MMPS 1200
 #define VELOCIDADE_RETA_MMPS 2900 //2905 VELOCIDADE MÁXIMA COM 8.23V BATERIA
 #define VELOCIDADE_CORRIDA_MMPS 1200
 
@@ -59,16 +59,16 @@
 
 // --- PID MAPEAMENTO/CURVAS ---
 #define PID_SETPOINT 0
-#define PID_KP 310 //270//310
-#define PID_KD 2900 //2500 //2900
-#define PID_KI 0
+#define PID_KP 330 //3200//310//310//400//310
+#define PID_KD 6200 //6200 //6100 //6000 //5400//5400 //6000 //2900
+#define PID_KI 70 //70//70//80//50
 
 // ---  PID EM RETAS ---
 #define PID_KP_RETA 190
 #define PID_KD_RETA 4500
 
 // +++ GANHOS PARA O PID DE VELOCIDADE +++
-#define PID_VEL_KP 100   // Valor inicial, necessita de ajuste
+#define PID_VEL_KP 200   // Valor inicial, necessita de ajuste
 #define PID_VEL_KI 20    // Valor inicial, necessita de ajuste
 #define PID_VEL_KD 0     // Geralmente não é necessário para velocidade
 #define PID_VEL_DIVISOR 1000
@@ -87,6 +87,7 @@
 // CONFIGURAÇÕES DO MAPEAMENTO
 // =============================================================================
 #define TAMANHO_MAPA 50
+#define TAMANHO_LOG_PISTA 1500
 // Distância (em mm) a partir da qual uma reta é considerada "longa"
 // o suficiente para aplicar potência máxima.
 #define LIMIAR_DISTANCIA_RETA_LONGA 800
@@ -96,6 +97,15 @@
 #define TEMPO_FRENAGEM_MS 50
 #define TEMPO_MAX_LINHA_PERDIDA_MS 100
 #define POS_LINHA_PERDIDA 250
+
+// =============================================================================
+// CONFIGURAÇÕES DO GYROSCOPIO E ACELEROMETRO
+// =============================================================================
+/*
+ * Caso for 1 habilita na inicialização para imprimir os valores
+ * Caso for 0 ignora o calculo e vai direito para calibração, ao inicializar o robo
+ */
+#define CALCULAR_VARIANCIA_GYRO_ACELEROMETRO 0
 
 // =============================================================================
 // CONFIGURAÇÕES DA BATERIA

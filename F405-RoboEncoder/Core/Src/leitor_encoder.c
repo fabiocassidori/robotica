@@ -16,6 +16,9 @@ static volatile uint16_t g_ultima_contagem_hw_dir = 0;
 static volatile int32_t g_posicao_esq = 0;
 static volatile int32_t g_posicao_dir = 0;
 
+// Irá armazenar o delta de pulsos calculado a cada ciclo de 1ms
+static volatile int32_t g_delta_pulsos_media_ciclo = 0;
+
 void encoder_inicializar(TIM_HandleTypeDef *htim_esq, TIM_HandleTypeDef *htim_dir) {
     g_htim_esq = htim_esq;
     g_htim_dir = htim_dir;
@@ -34,6 +37,9 @@ void encoder_atualizar_posicoes(void) {
     int16_t delta_esq = (int16_t)(contagem_atual_esq - g_ultima_contagem_hw_esq);
     g_posicao_esq += delta_esq;
     g_ultima_contagem_hw_esq = contagem_atual_esq;
+
+    // Calcula e armazena o delta médio neste ciclo
+    g_delta_pulsos_media_ciclo = (delta_dir + delta_esq) / 2;
 }
 
 int32_t encoder_obter_posicao_esquerda(void) {
@@ -51,7 +57,19 @@ void encoder_resetar_posicoes(void) {
     g_ultima_contagem_hw_esq = __HAL_TIM_GET_COUNTER(g_htim_esq);
     g_posicao_dir = 0;
     g_ultima_contagem_hw_dir = __HAL_TIM_GET_COUNTER(g_htim_dir);
+
+    g_delta_pulsos_media_ciclo = 0;
+
     if (!primask) {
         __enable_irq();
     }
+}
+
+/**
+ * @brief Retorna a média de pulsos percorridos desde a última chamada de 'encoder_atualizar_posicoes'.
+ * @return O delta médio de pulsos.
+ */
+int32_t encoder_obter_delta_pulsos_media(void) {
+	 // Agora, esta função simplesmente retorna o valor que já foi calculado e salvo.
+	    return g_delta_pulsos_media_ciclo;
 }
