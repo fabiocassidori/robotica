@@ -29,6 +29,7 @@ void encoder_atualizar_posicoes(void) {
 	uint16_t contagem_atual_dir = __HAL_TIM_GET_COUNTER(g_htim_dir);
 	g_posicao_dir += (int16_t)(contagem_atual_dir - g_ultima_contagem_hw_dir);
 	g_ultima_contagem_hw_dir = contagem_atual_dir;
+
 	uint16_t contagem_atual_esq = __HAL_TIM_GET_COUNTER(g_htim_esq);
 	g_posicao_esq += (int16_t)(contagem_atual_esq - g_ultima_contagem_hw_esq);
 	g_ultima_contagem_hw_esq = contagem_atual_esq;
@@ -44,14 +45,14 @@ int32_t encoder_obter_posicao_direita(void) {
 }
 
 void encoder_resetar_posicoes(void) {
-    uint32_t primask = __get_PRIMASK();
+    //uint32_t primask = __get_PRIMASK();
     __disable_irq();
     g_posicao_esq = 0;
     g_ultima_contagem_hw_esq = __HAL_TIM_GET_COUNTER(g_htim_esq);
     g_posicao_dir = 0;
     g_ultima_contagem_hw_dir = __HAL_TIM_GET_COUNTER(g_htim_dir);
-    if (!primask) {
+    //if (!primask) {
         __enable_irq();
-    }
+    //}
 }
 

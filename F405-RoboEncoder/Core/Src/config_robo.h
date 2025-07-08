@@ -94,10 +94,9 @@
 
 // Raio instantâneo (em mm), calculado a cada passo do log, acima do qual
 // consideramos que o robô está em uma reta para fins de velocidade máxima.
-#define RAIO_PARA_VEL_MAX_MM 2000.0f
+#define RAIO_PARA_VEL_MAX_MM 1200.0f
 #define LIMIAR_DISTANCIA_RETA_LONGA 800
-// Raio calculado a partir do qual se considera uma reta
-#define LIMIAR_CURVA_RETA 70
+#define LIMIAR_CURVA_RETA 50
 
 #define PORCENTAGEM_PULSOS_EM_VRETA 75
 #define TEMPO_FRENAGEM_MS 50

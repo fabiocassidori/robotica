@@ -325,7 +325,6 @@ int main(void)
 	  		  case ESTADO_LOGANDO:
 				// Primeiro, gera a tabela para que os dados possam ser usados no log
 				mapa_gerar_tabela_velocidade();
-
 				// Agora, imprime o log unificado que contém os novos dados
 				mapa_logar_pista_swo();
 				iu_buzina_temporizada(500);

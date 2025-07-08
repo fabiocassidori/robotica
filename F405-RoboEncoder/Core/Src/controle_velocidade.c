@@ -74,7 +74,6 @@ int velocidade_controlar_potencia(float velocidade_alvo_mmps) {
 	g_erro_anterior_vel = erro;
 	float termo_d = derivativo * PID_VEL_KD;
 
-	// --- CORREÇÃO CRÍTICA: RESTAURAR O DIVISOR ---
 	int32_t saida_pid = (int32_t)((termo_p + termo_i + termo_d) / PID_VEL_DIVISOR);
 
 	if (saida_pid > POTENCIA_MAX_MOTOR) saida_pid = POTENCIA_MAX_MOTOR;

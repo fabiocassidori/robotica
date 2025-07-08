@@ -12,7 +12,6 @@
 static int g_mapa_dist_media[TAMANHO_MAPA];
 static int32_t g_mapa_dist_media_pulsos[TAMANHO_MAPA];
 static int g_mapa_raio[TAMANHO_MAPA];
-// --- Variável de potência trocada por tipo de segmento ---
 static TipoSegmento g_mapa_tipo_segmento[TAMANHO_MAPA];
 static int g_segmentos_gravados = 0;
 static int g_ponteiro_segmento = 0;
@@ -23,15 +22,14 @@ static float g_log_distancia_mm[TAMANHO_LOG_PISTA];
 static float g_log_angulo_graus[TAMANHO_LOG_PISTA];
 static int g_log_indice = 0;
 static bool g_log_ativo = false;
+
 static float g_tabela_velocidade[TAMANHO_LOG_PISTA];
+// Armazena a velocidade média calculada para cada segmento, para fins de log e verificação.
+static float g_velocidade_por_segmento[TAMANHO_MAPA];
 
 // --- Variáveis para calcular o delta de forma independente para o log ---
 static int32_t g_pos_anterior_log_esq = 0;
 static int32_t g_pos_anterior_log_dir = 0;
-
-// Armazena a velocidade média calculada para cada segmento, para fins de log e verificação.
-static float g_velocidade_por_segmento[TAMANHO_MAPA];
-
 
 
 void mapa_inicializar(void) {
@@ -54,44 +52,19 @@ void mapa_gravar_segmento(void) {
 	        return;
 	    }
 
-	    // Lê a posição total em pulsos desde o último reset (feito no segmento anterior)
-	    int32_t pos_esq_pulsos = encoder_obter_posicao_esquerda();
-	    int32_t pos_dir_pulsos = encoder_obter_posicao_direita();
-
-	    // Armazena a distância média em pulsos para a lógica de aceleração em reta
-	    g_mapa_dist_media_pulsos[g_segmentos_gravados] = (pos_esq_pulsos + pos_dir_pulsos) / 2;
-
-	    // Converte os pulsos para milímetros para o cálculo do raio
-	    int g_mapa_dist_esq = (int)((float)pos_esq_pulsos * PULSOS_PARA_MM);
-	    int g_mapa_dist_dir = (int)((float)pos_dir_pulsos * PULSOS_PARA_MM);
-	    g_mapa_dist_media[g_segmentos_gravados] = (g_mapa_dist_esq + g_mapa_dist_dir) / 2;
-
-	    // Calcula o raio do segmento. A constante '6' provavelmente está relacionada à largura do robô.
-	    int32_t diff = g_mapa_dist_esq - g_mapa_dist_dir;
-	    if (diff == 0) {
-	        diff = 1; // Evita divisão por zero em uma reta perfeita
-	    }
-	    int32_t sum = g_mapa_dist_esq + g_mapa_dist_dir;
-	    g_mapa_raio[g_segmentos_gravados] = abs((int)(6 * sum / diff));
-
-	    // Define se o segmento é uma RETA ou CURVA com base no raio
-	    if (g_mapa_raio[g_segmentos_gravados] > LIMIAR_CURVA_RETA) {
-	        g_mapa_tipo_segmento[g_segmentos_gravados] = SEGMENTO_RETA;
-	    } else {
-	        g_mapa_tipo_segmento[g_segmentos_gravados] = SEGMENTO_CURVA;
-	    }
-
-	    // Garante que o primeiro segmento (a largada) nunca seja considerado
-	    // uma reta de alta velocidade, por segurança.
-	    if (g_segmentos_gravados == 0) {
-	        g_mapa_tipo_segmento[g_segmentos_gravados] = SEGMENTO_CURVA;
-	    }
-
-	    // Reseta a contagem de posição para o início do próximo segmento
-	    encoder_resetar_posicoes();
-
-	    // Incrementa o contador de segmentos gravados
-	    g_segmentos_gravados++;
+	int32_t pos_esq = encoder_obter_posicao_esquerda();
+	int32_t pos_dir = encoder_obter_posicao_direita();
+	g_mapa_dist_media_pulsos[g_segmentos_gravados] = (pos_esq + pos_dir) / 2;
+	int dist_esq_mm = (int)((float)pos_esq * PULSOS_PARA_MM);
+	int dist_dir_mm = (int)((float)pos_dir * PULSOS_PARA_MM);
+	g_mapa_dist_media[g_segmentos_gravados] = (dist_esq_mm + dist_dir_mm) / 2;
+	int32_t diff = dist_esq_mm - dist_dir_mm;
+	if (diff == 0) diff = 1;
+	g_mapa_raio[g_segmentos_gravados] = abs((int)(6 * (dist_esq_mm + dist_dir_mm) / diff));
+	g_mapa_tipo_segmento[g_segmentos_gravados] = (g_mapa_raio[g_segmentos_gravados] > LIMIAR_CURVA_RETA) ? SEGMENTO_RETA : SEGMENTO_CURVA;
+	if (g_segmentos_gravados == 0) { g_mapa_tipo_segmento[0] = SEGMENTO_CURVA; }
+	encoder_resetar_posicoes();
+	g_segmentos_gravados++;
 }
 
 bool mapa_corrida_terminou(uint8_t contador_fim) {
@@ -207,52 +180,50 @@ static float raio_para_velocidade(float raio_mm) {
     raio_mm = fabsf(raio_mm);
 
     // Se o raio for muito grande, considera como reta e usa a velocidade máxima.
-    if (raio_mm > LIMIAR_CURVA_RETA) {
-        return VELOCIDADE_RETA_MMPS;
+    if (raio_mm > (float)LIMIAR_CURVA_RETA) {
+    	return VELOCIDADE_RETA_MMPS;
     }
 
     // Interpolação linear simples:
     // Mapeia o raio (de 0 a RAIO_CONSIDERADO_RETA) para a velocidade (de VEL_MIN a VEL_MAX)
-    float fator = raio_mm / LIMIAR_CURVA_RETA;
+    float fator = raio_mm / (float)LIMIAR_CURVA_RETA;;
     float velocidade = VELOCIDADE_CORRIDA_MMPS + fator * (VELOCIDADE_RETA_MMPS - VELOCIDADE_CORRIDA_MMPS);
 
     return velocidade;
 }
 
 void mapa_gerar_tabela_velocidade(void) {
-	printf("Gerando tabela de velocidade a partir de %d pontos...\r\n", g_log_indice);
+	printf("Gerando tabela de velocidade detalhada...\r\n");
 	for (int i = 0; i < g_log_indice; i++) {
-		float dist = g_log_distancia_mm[i];
-		float angulo_rad = g_log_angulo_graus[i] * (CONSTANTE_PI / 180.0f);
-		if (fabsf(angulo_rad) < 1e-6f) {
-			g_tabela_velocidade[i] = VELOCIDADE_RETA_MMPS;
-		} else {
-			float raio_mm = fabsf(dist / angulo_rad);
-			g_tabela_velocidade[i] = raio_para_velocidade(raio_mm);
+	float dist = g_log_distancia_mm[i];
+	float angulo_rad = g_log_angulo_graus[i] * (CONSTANTE_PI / 180.0f);
+
+	if (fabsf(angulo_rad) < 1e-6f) {
+		g_tabela_velocidade[i] = VELOCIDADE_RETA_MMPS;
+	} else {
+		// O raio instantâneo é calculado em mm, então usamos a constante correta.
+			float raio_mm_instantaneo = fabsf(dist / angulo_rad);
+
+			// Aqui usamos a constante RAIO_PARA_VEL_MAX_MM para a interpolação da tabela detalhada.
+			if (raio_mm_instantaneo > RAIO_PARA_VEL_MAX_MM) {
+				 g_tabela_velocidade[i] = VELOCIDADE_RETA_MMPS;
+			} else {
+				 float fator = raio_mm_instantaneo / RAIO_PARA_VEL_MAX_MM;
+				 g_tabela_velocidade[i] = VELOCIDADE_CORRIDA_MMPS + fator * (VELOCIDADE_RETA_MMPS - VELOCIDADE_CORRIDA_MMPS);
+			}
 		}
 	}
 
-	printf("Calculando velocidade representativa por segmento...\r\n");
-	int log_idx_atual = 0;
+	// --- LÓGICA DE LOG SIMPLIFICADA E CORRIGIDA ---
+	printf("Calculando velocidade por segmento para o log...\r\n");
 	for (int i = 0; i < g_segmentos_gravados; i++) {
-		float dist_segmento_mm = (float)g_mapa_dist_media[i];
-		float dist_percorrida_log = 0;
-		float soma_velocidade = 0;
-		int pontos_no_segmento = 0;
-		while (log_idx_atual < g_log_indice && dist_percorrida_log < dist_segmento_mm) {
-			dist_percorrida_log += g_log_distancia_mm[log_idx_atual];
-			soma_velocidade += g_tabela_velocidade[log_idx_atual];
-			pontos_no_segmento++;
-			log_idx_atual++;
-		}
-		if (pontos_no_segmento > 0) {
-			g_velocidade_por_segmento[i] = soma_velocidade / pontos_no_segmento;
-		} else {
-			g_velocidade_por_segmento[i] = VELOCIDADE_MAPEAMENTO_MMPS;
-		}
+		// Usamos a função raio_para_velocidade com o raio já calculado para o segmento.
+		// Isso garante consistência entre o tipo de segmento e a velocidade alvo exibida.
+		g_velocidade_por_segmento[i] = raio_para_velocidade((float)g_mapa_raio[i]);
 	}
-	printf("Tabela de velocidade gerada com sucesso!\r\n");
-}
+
+	printf("Tabela de velocidade e log de segmentos gerados com sucesso!\r\n");
+	}
 
 /**
  * @brief Retorna a velocidade alvo para um ponto específico do log.
