@@ -9,14 +9,11 @@
 #include <stdlib.h>
 #include <math.h>
 
-static int g_mapa_dist_esq[TAMANHO_MAPA];
-static int g_mapa_dist_dir[TAMANHO_MAPA];
 static int g_mapa_dist_media[TAMANHO_MAPA];
 static int32_t g_mapa_dist_media_pulsos[TAMANHO_MAPA];
 static int g_mapa_raio[TAMANHO_MAPA];
 // --- Variável de potência trocada por tipo de segmento ---
 static TipoSegmento g_mapa_tipo_segmento[TAMANHO_MAPA];
-
 static int g_segmentos_gravados = 0;
 static int g_ponteiro_segmento = 0;
 
@@ -26,49 +23,75 @@ static float g_log_distancia_mm[TAMANHO_LOG_PISTA];
 static float g_log_angulo_graus[TAMANHO_LOG_PISTA];
 static int g_log_indice = 0;
 static bool g_log_ativo = false;
-
 static float g_tabela_velocidade[TAMANHO_LOG_PISTA];
+
+// --- Variáveis para calcular o delta de forma independente para o log ---
+static int32_t g_pos_anterior_log_esq = 0;
+static int32_t g_pos_anterior_log_dir = 0;
+
+// Armazena a velocidade média calculada para cada segmento, para fins de log e verificação.
+static float g_velocidade_por_segmento[TAMANHO_MAPA];
+
 
 
 void mapa_inicializar(void) {
     for (int i = 0; i < TAMANHO_MAPA; i++) {
-        g_mapa_dist_esq[i] = 0; g_mapa_dist_dir[i] = 0; g_mapa_dist_media[i] = 0;
-        g_mapa_raio[i] = 0; g_mapa_dist_media_pulsos[i] = 0;
-        g_mapa_tipo_segmento[i] = SEGMENTO_CURVA; // Padrão
+    	g_mapa_dist_media[i] = 0;
+		g_mapa_raio[i] = 0;
+		g_mapa_dist_media_pulsos[i] = 0;
+		g_mapa_tipo_segmento[i] = SEGMENTO_CURVA;
+		g_velocidade_por_segmento[i] = 0.0f;
     }
-    g_segmentos_gravados = 0; g_ponteiro_segmento = 0;
+    g_segmentos_gravados = 0;
+    g_ponteiro_segmento = 0;
+    mapa_iniciar_log_pista(); // Inicia o log, mas a flag `g_log_ativo` controla a gravação
+    g_log_ativo = false;
 }
 
 void mapa_gravar_segmento(void) {
-    if (g_segmentos_gravados >= TAMANHO_MAPA) { printf("ERRO: Mapa cheio!\r\n"); return; }
+	if (g_segmentos_gravados >= TAMANHO_MAPA) {
+	        printf("ERRO: Mapa de segmentos cheio!\r\n");
+	        return;
+	    }
 
-    int32_t pos_esq_pulsos = encoder_obter_posicao_esquerda();
-    int32_t pos_dir_pulsos = encoder_obter_posicao_direita();
-    g_mapa_dist_media_pulsos[g_segmentos_gravados] = (pos_esq_pulsos + pos_dir_pulsos) / 2;
+	    // Lê a posição total em pulsos desde o último reset (feito no segmento anterior)
+	    int32_t pos_esq_pulsos = encoder_obter_posicao_esquerda();
+	    int32_t pos_dir_pulsos = encoder_obter_posicao_direita();
 
-    g_mapa_dist_esq[g_segmentos_gravados] = (int)(PULSOS_PARA_MM * pos_esq_pulsos);
-    g_mapa_dist_dir[g_segmentos_gravados] = (int)(PULSOS_PARA_MM * pos_dir_pulsos);
-    g_mapa_dist_media[g_segmentos_gravados] = (g_mapa_dist_esq[g_segmentos_gravados] + g_mapa_dist_dir[g_segmentos_gravados]) / 2;
+	    // Armazena a distância média em pulsos para a lógica de aceleração em reta
+	    g_mapa_dist_media_pulsos[g_segmentos_gravados] = (pos_esq_pulsos + pos_dir_pulsos) / 2;
 
-    int32_t diff = g_mapa_dist_esq[g_segmentos_gravados] - g_mapa_dist_dir[g_segmentos_gravados];
-    if (diff == 0) diff = 1;
-    int32_t sum = g_mapa_dist_esq[g_segmentos_gravados] + g_mapa_dist_dir[g_segmentos_gravados];
-    g_mapa_raio[g_segmentos_gravados] = abs((int)(6 * sum / diff));
+	    // Converte os pulsos para milímetros para o cálculo do raio
+	    int g_mapa_dist_esq = (int)((float)pos_esq_pulsos * PULSOS_PARA_MM);
+	    int g_mapa_dist_dir = (int)((float)pos_dir_pulsos * PULSOS_PARA_MM);
+	    g_mapa_dist_media[g_segmentos_gravados] = (g_mapa_dist_esq + g_mapa_dist_dir) / 2;
 
-    // ++: Armazena o TIPO do segmento, não a potência +++
-    if (g_mapa_raio[g_segmentos_gravados] > LIMIAR_CURVA_RETA) {
-        g_mapa_tipo_segmento[g_segmentos_gravados] = SEGMENTO_RETA;
-    } else {
-        g_mapa_tipo_segmento[g_segmentos_gravados] = SEGMENTO_CURVA;
-    }
+	    // Calcula o raio do segmento. A constante '6' provavelmente está relacionada à largura do robô.
+	    int32_t diff = g_mapa_dist_esq - g_mapa_dist_dir;
+	    if (diff == 0) {
+	        diff = 1; // Evita divisão por zero em uma reta perfeita
+	    }
+	    int32_t sum = g_mapa_dist_esq + g_mapa_dist_dir;
+	    g_mapa_raio[g_segmentos_gravados] = abs((int)(6 * sum / diff));
 
-    // Garante que o primeiro segmento nunca seja uma reta de alta velocidade
-    if (g_segmentos_gravados == 0) {
-        g_mapa_tipo_segmento[g_segmentos_gravados] = SEGMENTO_CURVA;
-    }
+	    // Define se o segmento é uma RETA ou CURVA com base no raio
+	    if (g_mapa_raio[g_segmentos_gravados] > LIMIAR_CURVA_RETA) {
+	        g_mapa_tipo_segmento[g_segmentos_gravados] = SEGMENTO_RETA;
+	    } else {
+	        g_mapa_tipo_segmento[g_segmentos_gravados] = SEGMENTO_CURVA;
+	    }
 
-    encoder_resetar_posicoes();
-    g_segmentos_gravados++;
+	    // Garante que o primeiro segmento (a largada) nunca seja considerado
+	    // uma reta de alta velocidade, por segurança.
+	    if (g_segmentos_gravados == 0) {
+	        g_mapa_tipo_segmento[g_segmentos_gravados] = SEGMENTO_CURVA;
+	    }
+
+	    // Reseta a contagem de posição para o início do próximo segmento
+	    encoder_resetar_posicoes();
+
+	    // Incrementa o contador de segmentos gravados
+	    g_segmentos_gravados++;
 }
 
 bool mapa_corrida_terminou(uint8_t contador_fim) {
@@ -107,10 +130,6 @@ int32_t mapa_obter_distancia_pulsos_segmento_atual(void) {
     return g_mapa_dist_media_pulsos[g_ponteiro_segmento];
 }
 
-void mapa_logar_dados_swo(void) {
-
-
-}
 
 void mapa_iniciar_log_pista(void) {
     printf("Iniciando log da pista...\r\n");
@@ -119,6 +138,9 @@ void mapa_iniciar_log_pista(void) {
         g_log_angulo_graus[i] = 0.0f;
     }
     g_log_indice = 0;
+    // Inicializa as posições e o ângulo para o cálculo do primeiro delta
+	g_pos_anterior_log_esq = encoder_obter_posicao_esquerda();
+	g_pos_anterior_log_dir = encoder_obter_posicao_direita();
     g_log_ativo = true;
 }
 
@@ -128,44 +150,56 @@ void mapa_parar_log_pista(void) {
 }
 
 void mapa_gravar_passo_log(void) {
-    if (!g_log_ativo || g_log_indice >= TAMANHO_LOG_PISTA) {
-        if (g_log_ativo) {
-            printf("ERRO: Log da pista cheio!\r\n");
-            g_log_ativo = false; // Para de gravar para evitar overflow
-        }
-        return;
-    }
+	if (!g_log_ativo || g_log_indice >= TAMANHO_LOG_PISTA) {
+	        if (g_log_ativo) {
+	            printf("ERRO: Log da pista cheio!\r\n");
+	            g_log_ativo = false; // Para de gravar para evitar overflow
+	        }
+	        return;
+	    }
 
-    // 1. Calcula a distância percorrida neste ciclo
-    int32_t delta_pulsos = encoder_obter_delta_pulsos_media();
-    float delta_dist_mm = (float)delta_pulsos * PULSOS_PARA_MM;
+		int32_t pos_atual_esq = encoder_obter_posicao_esquerda();
+	    int32_t pos_atual_dir = encoder_obter_posicao_direita();
 
-    // 2. Calcula a variação de ângulo neste ciclo
-    // Variação Ângulo = Velocidade Angular * Tempo
-    float vel_angular_dps = mpu9250_obter_velocidade_angular_y(); // em graus/segundo
-    float delta_angulo_graus = vel_angular_dps * INTERVALO_LOOP_MPU_S; // (graus/s) * s = graus
+	    // Calcula o delta desde a última chamada desta função (10ms atrás)
+	    int32_t delta_esq = pos_atual_esq - g_pos_anterior_log_esq;
+	    int32_t delta_dir = pos_atual_dir - g_pos_anterior_log_dir;
 
-    // 3. Armazena os valores no log
-    g_log_distancia_mm[g_log_indice] = delta_dist_mm;
-    g_log_angulo_graus[g_log_indice] = delta_angulo_graus;
+	    g_pos_anterior_log_esq = pos_atual_esq;
+	    g_pos_anterior_log_dir = pos_atual_dir;
 
-    // 4. Avança para o próximo índice
-    g_log_indice++;
+	    g_log_distancia_mm[g_log_indice] = (float)((delta_esq + delta_dir) / 2) * PULSOS_PARA_MM;
+
+	    float vel_angular_dps = mpu9250_obter_velocidade_angular_y();
+	    g_log_angulo_graus[g_log_indice] = vel_angular_dps * (INTERVALO_LOOP_CONTROLE_S * 10.0f); // Intervalo de 10ms
+
+	    g_log_indice++;
 }
 
 void mapa_logar_pista_swo(void) {
-    printf("--- Log Detalhado da Pista ---\r\n");
-    printf("Distancia (mm);");
-    for (int i = 0; i < g_log_indice; i++) {
-        printf("%.4f;", g_log_distancia_mm[i]);
-    }
-    printf("\n");
+	 float tensao_bateria = bateria_obter_tensao();
+	printf("\n--- LOG DE DADOS ---\r\n");
+	printf("Tensao da Bateria (estimada): %.2fV\r\n\n", tensao_bateria);
 
-    printf("Angulo (graus);");
-    for (int i = 0; i < g_log_indice; i++) {
-        printf("%.4f;", g_log_angulo_graus[i]);
-    }
-    printf("\n--------------------------------\r\n");
+	printf("--- Log de Segmentos (Logica Antiga) ---\r\n");
+	printf("Segmento;Tipo;Dist(mm);Raio;Velocidade Alvo(mm/s)\r\n");
+	for (int i = 0; i < g_segmentos_gravados; i++) {
+		printf("%d;%s;%d;%d;%.0f\r\n", i + 1,
+			   (g_mapa_tipo_segmento[i] == SEGMENTO_RETA ? "RETA" : "CURVA"),
+			   g_mapa_dist_media[i],
+			   g_mapa_raio[i],
+			   g_velocidade_por_segmento[i]);
+	}
+	printf("----------------------------------------\r\n\n");
+
+	printf("--- Log Detalhado da Pista (Total: %d pontos) ---\r\n", g_log_indice);
+	printf("Distancia(mm);");
+	for (int i = 0; i < g_log_indice; i++) { printf("%.4f;", g_log_distancia_mm[i]); }
+	printf("\nAngulo(graus);");
+	for (int i = 0; i < g_log_indice; i++) { printf("%.4f;", g_log_angulo_graus[i]); }
+	printf("\nVelocidade Tabela(mm/s);");
+	for (int i = 0; i < g_log_indice; i++) { printf("%.0f;", g_tabela_velocidade[i]); }
+	printf("\n--------------------------------\r\n");
 }
 
 static float raio_para_velocidade(float raio_mm) {
@@ -186,25 +220,38 @@ static float raio_para_velocidade(float raio_mm) {
 }
 
 void mapa_gerar_tabela_velocidade(void) {
-    printf("Gerando tabela de velocidade a partir de %d pontos...\r\n", g_log_indice);
+	printf("Gerando tabela de velocidade a partir de %d pontos...\r\n", g_log_indice);
+	for (int i = 0; i < g_log_indice; i++) {
+		float dist = g_log_distancia_mm[i];
+		float angulo_rad = g_log_angulo_graus[i] * (CONSTANTE_PI / 180.0f);
+		if (fabsf(angulo_rad) < 1e-6f) {
+			g_tabela_velocidade[i] = VELOCIDADE_RETA_MMPS;
+		} else {
+			float raio_mm = fabsf(dist / angulo_rad);
+			g_tabela_velocidade[i] = raio_para_velocidade(raio_mm);
+		}
+	}
 
-    for (int i = 0; i < g_log_indice; i++) {
-        float dist = g_log_distancia_mm[i];
-        float angulo_rad = g_log_angulo_graus[i] * (CONSTANTE_PI / 180.0f); // Converte para radianos
-
-        // Evita divisão por zero se o robô andou em linha perfeitamente reta
-        if (fabsf(angulo_rad) < 1e-6) {
-            // Se o ângulo é quase zero, o raio é infinito (reta)
-            g_tabela_velocidade[i] = VELOCIDADE_RETA_MMPS;
-        } else {
-            // Calcula o raio da curva para este passo
-            float raio_mm = fabsf(dist / angulo_rad);
-            // Converte o raio em uma velocidade alvo
-            g_tabela_velocidade[i] = raio_para_velocidade(raio_mm);
-        }
-    }
-
-    printf("Tabela de velocidade gerada com sucesso!\r\n");
+	printf("Calculando velocidade representativa por segmento...\r\n");
+	int log_idx_atual = 0;
+	for (int i = 0; i < g_segmentos_gravados; i++) {
+		float dist_segmento_mm = (float)g_mapa_dist_media[i];
+		float dist_percorrida_log = 0;
+		float soma_velocidade = 0;
+		int pontos_no_segmento = 0;
+		while (log_idx_atual < g_log_indice && dist_percorrida_log < dist_segmento_mm) {
+			dist_percorrida_log += g_log_distancia_mm[log_idx_atual];
+			soma_velocidade += g_tabela_velocidade[log_idx_atual];
+			pontos_no_segmento++;
+			log_idx_atual++;
+		}
+		if (pontos_no_segmento > 0) {
+			g_velocidade_por_segmento[i] = soma_velocidade / pontos_no_segmento;
+		} else {
+			g_velocidade_por_segmento[i] = VELOCIDADE_MAPEAMENTO_MMPS;
+		}
+	}
+	printf("Tabela de velocidade gerada com sucesso!\r\n");
 }
 
 /**

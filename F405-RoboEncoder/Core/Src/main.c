@@ -222,29 +222,31 @@ int main(void)
 	      if (g_flag_loop_1ms) {
 	        g_flag_loop_1ms = false;
 
-	        encoder_atualizar_posicoes();
-			// A lógica de leitura e mapeamento deve estar aqui para a verificação
-			int pos_bruta = sensor_linha_ler_posicao();
-//			printf("posicao bruta: %d\n", pos_bruta);
-			int pos_mapeada = (int)(((long)(pos_bruta - SENSOR_POSICAO_MIN) * range_posicao_interpolada) / range_posicao_sensor + POSICAO_ENTRADA_MIN);
-//			printf("posicao mapeada: %d\n", pos_mapeada);
-//			HAL_Delay(200);
+	        encoder_atualizar_posicoes(); // Acumula posição total
+	        velocidade_atualizar();       // Calcula velocidade instantânea
 
 	          if (g_estado_robo == ESTADO_MAPEAMENTO ||
 				  g_estado_robo == ESTADO_CORRIDA ||
 				  g_estado_robo == ESTADO_ACELERANDO_RETA ||
-				  g_estado_robo == ESTADO_FRENAGEM) {
+				  g_estado_robo == ESTADO_FRENAGEM ||
+				  g_estado_robo == ESTADO_DESACELERANDO_FINAL) {
 
-	        	  //Verifica se saiu forda da pista
-	        	  if (sensor_linha_is_robo_fora_da_pista(pos_mapeada)) {
-					 // Se saiu, muda o estado e para os motores.
-					 // Nenhuma outra ação de controle de movimento será executada neste ciclo.
-					 g_estado_robo = ESTADO_FORA_DA_PISTA;
-					 motor_parar(true); // Este comando agora não será sobreposto
-				 } else {
-					 // Se NÃO saiu, executa a lógica normal de controle de velocidade e direção.
-					 executar_loop_rapido(pos_mapeada);
-				 }
+				int pos_bruta = sensor_linha_ler_posicao();
+				//			printf("posicao bruta: %d\n", pos_bruta);
+				int pos_mapeada = (int)(((long)(pos_bruta - SENSOR_POSICAO_MIN) * range_posicao_interpolada) / range_posicao_sensor + POSICAO_ENTRADA_MIN);
+				//			printf("posicao mapeada: %d\n", pos_mapeada);
+				//			HAL_Delay(200);
+
+				//Verifica se saiu forda da pista
+				if (sensor_linha_is_robo_fora_da_pista(pos_mapeada)) {
+				 // Se saiu, muda o estado e para os motores.
+				 // Nenhuma outra ação de controle de movimento será executada neste ciclo.
+				 g_estado_robo = ESTADO_FORA_DA_PISTA;
+				 motor_parar(true); // Este comando agora não será sobreposto
+				} else {
+				 // Se NÃO saiu, executa a lógica normal de controle de velocidade e direção.
+				 executar_loop_rapido(pos_mapeada);
+				}
 	          }
 	      }
 
@@ -252,36 +254,28 @@ int main(void)
 	      // --- LOOP DA MPU E KALMAN (4ms) ---
 		  if (g_flag_loop_4ms) {
 			  g_flag_loop_4ms = false;
-
 			  // Tarefas de média prioridade executadas a 250 Hz
 			  mpu9250_ler_sensores();
-
-			  velocidade_atualizar();
-
-			  if (g_estado_robo == ESTADO_MAPEAMENTO) {
-			       mapa_gravar_passo_log();
-			  }
-			  //float omega = mpu9250_obter_velocidade_angular_y();
-			  //float theta = mpu9250_obter_angulo_acelerometro();
-			  //float angulo_filtrado = kalman_atualizar(omega, theta);
-
-			  // Se precisar usar o 'angulo_filtrado' no futuro,
-			  // declare-o como uma variável global estática para que o loop de 1ms possa acessá-lo.
+			  // Futuramente, a chamada ao kalman_atualizar virá aqui
 		  }
 
 		   //--- LOOP LENTO (10ms) ---
 		  if (g_flag_loop_10ms) {
+			g_flag_loop_10ms = false;
+			bateria_atualizar();
+			iu_atualizar(); // Atualiza buzina
 
-			  g_flag_loop_10ms = false;
-			  bateria_atualizar();
-			  iu_atualizar(); // Atualiza buzina
+			if (g_estado_robo == ESTADO_MAPEAMENTO ||
+			  g_estado_robo == ESTADO_CORRIDA ||
+			  g_estado_robo == ESTADO_ACELERANDO_RETA) {
 
-			  if (g_estado_robo == ESTADO_MAPEAMENTO ||
-			      g_estado_robo == ESTADO_CORRIDA ||
-			      g_estado_robo == ESTADO_ACELERANDO_RETA) {
+			  executar_loop_lento(); // Verifica marcadores de pista
+			}
 
-				  executar_loop_lento(); // Verifica marcadores de pista
-			  }
+			// Grava o log contínuo da pista a 100 Hz durante o mapeamento
+			if (g_estado_robo == ESTADO_MAPEAMENTO) {
+			 mapa_gravar_passo_log();
+			}
 		  }
 
 		  // Máquina de estados principal
@@ -329,15 +323,14 @@ int main(void)
 	  			  break;
 
 	  		  case ESTADO_LOGANDO:
-	  			  mapa_logar_dados_swo();
-	  			  mapa_logar_pista_swo();
+				// Primeiro, gera a tabela para que os dados possam ser usados no log
+				mapa_gerar_tabela_velocidade();
 
-	  			  // Processa o log que acabamos de fazer e cria o plano de velocidade
-				  mapa_gerar_tabela_velocidade();
-
-				  iu_buzina_temporizada(500);
-	  			  g_estado_robo = ESTADO_AGUARDANDO_CORRIDA;
-	  			  break;
+				// Agora, imprime o log unificado que contém os novos dados
+				mapa_logar_pista_swo();
+				iu_buzina_temporizada(500);
+				g_estado_robo = ESTADO_AGUARDANDO_CORRIDA;
+				break;
 
 	  		  case ESTADO_AGUARDANDO_CORRIDA:
 	  			  printf("Pressione para iniciar a corrida.\r\n");
@@ -967,8 +960,6 @@ static void MX_GPIO_Init(void)
 
 void executar_loop_rapido(int pos_mapeada) {
 
-	velocidade_atualizar();
-
 	// +++ REGISTRO DA VELOCIDADE MÁXIMA +++
 	// Apenas registra quando estamos no modo de aceleração em reta
 	if (g_estado_robo == ESTADO_ACELERANDO_RETA) {
@@ -985,8 +976,6 @@ void executar_loop_rapido(int pos_mapeada) {
     if (g_estado_robo ==  ESTADO_MAPEAMENTO ) {
     	velocidade_alvo_mmps  = VELOCIDADE_MAPEAMENTO_MMPS;
     	correcao_direcao  = pid_calcular_correcao(pos_mapeada);
-    	mapa_gravar_passo_log();
-
     }
 
     // ESTADO DE CORRIDA

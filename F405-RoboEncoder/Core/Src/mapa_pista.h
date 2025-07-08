@@ -24,7 +24,6 @@ void mapa_avancar_segmento(void);
 bool mapa_corrida_terminou(uint8_t contador_fim);
 bool mapa_segmento_atual_e_reta_longa(void);
 int32_t mapa_obter_distancia_pulsos_segmento_atual(void);
-void mapa_logar_dados_swo(void);
 
 // --- FUNÇÕES PARA MAPEAMENTO CONTÍNUO ---
 void mapa_iniciar_log_pista(void);

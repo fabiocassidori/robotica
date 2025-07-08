@@ -112,7 +112,7 @@
  * os valores de variância do Giroscópio e Acelerômetro.
  * Caso for 0, ignora o cálculo e vai direto para a calibração dos sensores de linha.
  */
-#define CALCULAR_VARIANCIA_GYRO_ACELEROMETRO 1
+#define CALCULAR_VARIANCIA_GYRO_ACELEROMETRO 0
 
 // =============================================================================
 // CONFIGURAÇÕES DA BATERIA
