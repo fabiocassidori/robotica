@@ -150,80 +150,72 @@ void mapa_gravar_passo_log(void) {
 }
 
 void mapa_logar_pista_swo(void) {
-	 float tensao_bateria = bateria_obter_tensao();
-	printf("\n--- LOG DE DADOS ---\r\n");
-	printf("Tensao da Bateria (estimada): %.2fV\r\n\n", tensao_bateria);
+	// A implementação da sua função de log unificada está correta e agora imprimirá os dados consistentes.
+	    float tensao_bateria = bateria_obter_tensao();
+		printf("\n--- LOG DE DADOS ---\r\n");
+		printf("Tensao da Bateria (estimada): %.2fV\r\n\n", tensao_bateria);
 
-	printf("--- Log de Segmentos (Logica Antiga) ---\r\n");
-	printf("Segmento;Tipo;Dist(mm);Raio;Velocidade Alvo(mm/s)\r\n");
-	for (int i = 0; i < g_segmentos_gravados; i++) {
-		printf("%d;%s;%d;%d;%.0f\r\n", i + 1,
-			   (g_mapa_tipo_segmento[i] == SEGMENTO_RETA ? "RETA" : "CURVA"),
-			   g_mapa_dist_media[i],
-			   g_mapa_raio[i],
-			   g_velocidade_por_segmento[i]);
-	}
-	printf("----------------------------------------\r\n\n");
+		printf("--- Log de Segmentos (Analise) ---\r\n");
+		printf("Segmento;Tipo;Dist(mm);Raio;Velocidade Alvo(mm/s)\r\n");
+		for (int i = 0; i < g_segmentos_gravados; i++) {
+			printf("%d;%s;%d;%d;%.0f\r\n", i + 1,
+				   (g_mapa_tipo_segmento[i] == SEGMENTO_RETA ? "RETA" : "CURVA"),
+				   g_mapa_dist_media[i],
+				   g_mapa_raio[i],
+				   g_velocidade_por_segmento[i]);
+		}
+		printf("----------------------------------------\r\n\n");
 
-	printf("--- Log Detalhado da Pista (Total: %d pontos) ---\r\n", g_log_indice);
-	printf("Distancia(mm);");
-	for (int i = 0; i < g_log_indice; i++) { printf("%.4f;", g_log_distancia_mm[i]); }
-	printf("\nAngulo(graus);");
-	for (int i = 0; i < g_log_indice; i++) { printf("%.4f;", g_log_angulo_graus[i]); }
-	printf("\nVelocidade Tabela(mm/s);");
-	for (int i = 0; i < g_log_indice; i++) { printf("%.0f;", g_tabela_velocidade[i]); }
-	printf("\n--------------------------------\r\n");
+		printf("--- Log Detalhado da Pista (Total: %d pontos) ---\r\n", g_log_indice);
+		printf("Velocidade Tabela(mm/s);");
+		for (int i = 0; i < g_log_indice; i++) { printf("%.0f;", g_tabela_velocidade[i]); }
+		printf("\n--------------------------------\r\n");
 }
 
-static float raio_para_velocidade(float raio_mm) {
-    // Garante que o raio não seja negativo
-    raio_mm = fabsf(raio_mm);
-
-    // Se o raio for muito grande, considera como reta e usa a velocidade máxima.
-    if (raio_mm > (float)LIMIAR_CURVA_RETA) {
-    	return VELOCIDADE_RETA_MMPS;
+static float raio_segmento_para_velocidade(float raio_segmento) {
+    raio_segmento = fabsf(raio_segmento);
+    if (raio_segmento > (float)LIMIAR_CURVA_RETA) {
+        return VELOCIDADE_RETA_MMPS;
     }
+    float fator = raio_segmento / (float)LIMIAR_CURVA_RETA;
+    return VELOCIDADE_CORRIDA_MMPS + fator * (VELOCIDADE_RETA_MMPS - VELOCIDADE_CORRIDA_MMPS);
+}
 
-    // Interpolação linear simples:
-    // Mapeia o raio (de 0 a RAIO_CONSIDERADO_RETA) para a velocidade (de VEL_MIN a VEL_MAX)
-    float fator = raio_mm / (float)LIMIAR_CURVA_RETA;;
-    float velocidade = VELOCIDADE_CORRIDA_MMPS + fator * (VELOCIDADE_RETA_MMPS - VELOCIDADE_CORRIDA_MMPS);
-
-    return velocidade;
+/**
+ * @brief Converte o RAIO INSTANTÂNEO em uma velocidade alvo para a TABELA DETALHADA.
+ * Usa o limiar da nova lógica de mapeamento contínuo (RAIO_PARA_VEL_MAX_MM).
+ */
+static float raio_instantaneo_para_velocidade(float raio_mm_instantaneo) {
+    raio_mm_instantaneo = fabsf(raio_mm_instantaneo);
+    if (raio_mm_instantaneo > RAIO_PARA_VEL_MAX_MM) {
+        return VELOCIDADE_RETA_MMPS;
+    }
+    float fator = raio_mm_instantaneo / RAIO_PARA_VEL_MAX_MM;
+    return VELOCIDADE_CORRIDA_MMPS + fator * (VELOCIDADE_RETA_MMPS - VELOCIDADE_CORRIDA_MMPS);
 }
 
 void mapa_gerar_tabela_velocidade(void) {
 	printf("Gerando tabela de velocidade detalhada...\r\n");
+	// 1. Gera a tabela de velocidades detalhada (para a corrida futura)
 	for (int i = 0; i < g_log_indice; i++) {
-	float dist = g_log_distancia_mm[i];
-	float angulo_rad = g_log_angulo_graus[i] * (CONSTANTE_PI / 180.0f);
-
-	if (fabsf(angulo_rad) < 1e-6f) {
-		g_tabela_velocidade[i] = VELOCIDADE_RETA_MMPS;
-	} else {
-		// O raio instantâneo é calculado em mm, então usamos a constante correta.
+		float dist = g_log_distancia_mm[i];
+		float angulo_rad = g_log_angulo_graus[i] * (CONSTANTE_PI / 180.0f);
+		if (fabsf(angulo_rad) < 1e-6f) {
+			g_tabela_velocidade[i] = VELOCIDADE_RETA_MMPS;
+		} else {
 			float raio_mm_instantaneo = fabsf(dist / angulo_rad);
-
-			// Aqui usamos a constante RAIO_PARA_VEL_MAX_MM para a interpolação da tabela detalhada.
-			if (raio_mm_instantaneo > RAIO_PARA_VEL_MAX_MM) {
-				 g_tabela_velocidade[i] = VELOCIDADE_RETA_MMPS;
-			} else {
-				 float fator = raio_mm_instantaneo / RAIO_PARA_VEL_MAX_MM;
-				 g_tabela_velocidade[i] = VELOCIDADE_CORRIDA_MMPS + fator * (VELOCIDADE_RETA_MMPS - VELOCIDADE_CORRIDA_MMPS);
-			}
+			g_tabela_velocidade[i] = raio_instantaneo_para_velocidade(raio_mm_instantaneo);
 		}
 	}
 
-	// --- LÓGICA DE LOG SIMPLIFICADA E CORRIGIDA ---
+	// 2. CORREÇÃO: Calcula a velocidade para o log de segmentos de forma consistente.
 	printf("Calculando velocidade por segmento para o log...\r\n");
 	for (int i = 0; i < g_segmentos_gravados; i++) {
-		// Usamos a função raio_para_velocidade com o raio já calculado para o segmento.
-		// Isso garante consistência entre o tipo de segmento e a velocidade alvo exibida.
-		g_velocidade_por_segmento[i] = raio_para_velocidade((float)g_mapa_raio[i]);
+		g_velocidade_por_segmento[i] = raio_segmento_para_velocidade((float)g_mapa_raio[i]);
 	}
 
 	printf("Tabela de velocidade e log de segmentos gerados com sucesso!\r\n");
-	}
+}
 
 /**
  * @brief Retorna a velocidade alvo para um ponto específico do log.
