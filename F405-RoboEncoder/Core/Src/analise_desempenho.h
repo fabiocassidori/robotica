@@ -1,8 +1,8 @@
 /*
  * analise_desempenho.h
  *
- *  Created on: Jul 8, 2025
- *      Author: jlour
+ * Created on: Jul 8, 2025
+ * Author: jlour
  */
 
 #ifndef SRC_ANALISE_DESEMPENHO_H_
@@ -15,8 +15,10 @@
 void analise_desempenho_inicializar(void);
 
 /**
- * @brief Calcula a aceleração instantânea e atualiza os valores máximos.
- * Deve ser chamado no loop de controle de alta frequência (1ms).
+ * @brief Atualiza o estado do módulo de análise de desempenho.
+ * Esta função deve ser chamada no loop de alta frequência (1ms) para
+ * aplicar o filtro de velocidade continuamente. O cálculo da aceleração
+ * será feito internamente em uma frequência menor.
  */
 void analise_desempenho_atualizar(void);
 
@@ -33,10 +35,5 @@ float analise_desempenho_obter_max_aceleracao(void);
  */
 float analise_desempenho_obter_max_desaceleracao(void);
 
-/**
- * @brief Obtém a aceleração instantânea calculada no último ciclo.
- * @return Aceleração instantânea em mm/s². Pode ser positiva (aceleração) ou negativa (desaceleração).
- */
-float analise_desempenho_obter_aceleracao_instantanea(void);
 
 #endif /* SRC_ANALISE_DESEMPENHO_H_ */

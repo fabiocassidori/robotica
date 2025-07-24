@@ -40,6 +40,7 @@
 #include "mpu9250.h"
 #include "kalman_filter.h"
 #include "analise_sensores.h"
+#include "analise_desempenho.h"
 
 /* USER CODE END Includes */
 
@@ -224,6 +225,7 @@ int main(void)
 
 	        encoder_atualizar_posicoes(); // Acumula posição total
 	        velocidade_atualizar();       // Calcula velocidade instantânea
+	        analise_desempenho_atualizar();
 
 	          if (g_estado_robo == ESTADO_MAPEAMENTO ||
 				  g_estado_robo == ESTADO_CORRIDA ||
@@ -264,6 +266,13 @@ int main(void)
 			g_flag_loop_10ms = false;
 			bateria_atualizar();
 			iu_atualizar(); // Atualiza buzina
+
+			// --- Log para depuração dos sensores MPU ---
+			float angulo_acel = mpu9250_obter_angulo_acelerometro();
+			float vel_angular_giro = mpu9250_obter_velocidade_angular_y();
+
+			// Formato: ANGULO_ACELEROMETRO;VELOCIDADE_ANGULAR_GIRO
+			printf("RAW_DATA;%.2f;%.2f\r\n", angulo_acel, vel_angular_giro);
 
 			if (g_estado_robo == ESTADO_MAPEAMENTO ||
 			  g_estado_robo == ESTADO_CORRIDA ||
@@ -336,8 +345,11 @@ int main(void)
 	  			  iu_aguardar_botao();
 	  			  iu_buzina_temporizada(150);
 	  			  HAL_Delay(1000);
+	  			  mapa_resetar_para_corrida();      // Zera contadores de distância dos encoders.
+				  velocidade_inicializar();         // Zera estado da velocidade e reseta o medidor de tempo.
+				  analise_desempenho_inicializar();
 	  			  motor_parar(false);
-	  			  mapa_resetar_para_corrida();
+
 	  			  // +++ RESETAR A VELOCIDADE MÁXIMA ANTES DA CORRIDA +++
 	  			  g_velocidade_maxima_registrada_mmps = 0.0f;
 	  			  g_dist_entrada_segmento_pulsos = 0;
@@ -391,7 +403,8 @@ int main(void)
 				  printf("Velocidade Maxima Atingida: %d mm/s\r\n", (int)g_velocidade_maxima_registrada_mmps);
 				  printf("=============================================\r\n");
 				  iu_buzina_temporizada(1000);
-
+				  printf("Aceleracao Maxima Registrada: %.2f mm/s^2\r\n", analise_desempenho_obter_max_aceleracao());
+				  printf("Desaceleracao Maxima Registrada: %.2f mm/s^2\r\n", analise_desempenho_obter_max_desaceleracao());
 				  // Após logar, pode ir para um estado final ou reiniciar
 				  printf("Pressione o botao para reiniciar.\r\n");
 				  iu_aguardar_botao();

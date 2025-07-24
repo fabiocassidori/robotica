@@ -3,72 +3,103 @@
  *
  * Created on: Jul 8, 2025
  * Author: jlour
+ * Refatorado para estabilizar medição de aceleração.
  */
 
 #include "analise_desempenho.h"
 #include "controle_velocidade.h"
 #include "config_robo.h"
 #include <math.h>
-#include <stdlib.h>
+#include "main.h"
 
-// O intervalo de cálculo DEVE ser o mesmo da janela de velocidade para consistência
+// --- NOVAS CONSTANTES PARA FILTRAGEM E CONTROLE DE TEMPO ---
+
+// Fator de suavização para o filtro passa-baixa da velocidade.
+// Valores menores suavizam mais, mas aumentam o atraso. 0.1 a 0.2 é um bom começo.
+#define FILTRO_VELOCIDADE_ALPHA 0.15f
+
+// Intervalo em milissegundos para calcular a aceleração. Aumentar este valor
+// torna a medição mais estável e menos suscetível a ruído.
 #define INTERVALO_CALCULO_ACELERACAO_MS 10
 
-static float g_velocidade_anterior_mmps = 0.0f;
+// Número de cálculos de aceleração a serem ignorados no início para estabilização.
+#define CALCS_DE_GRACA 3 // Ignora os primeiros 3 cálculos (30ms)
+
+// --- Variáveis estáticas ---
+static float g_velocidade_filtrada_anterior_mmps = 0.0f;
+static float g_velocidade_filtrada_atual_mmps = 0.0f;
 static float g_max_aceleracao_mmps2 = 0.0f;
 static float g_max_desaceleracao_mmps2 = 0.0f;
-static float g_aceleracao_estimada_mmps2 = 0.0f;
-static int g_contador_ciclos = 0;
+static uint32_t g_tick_anterior_calculo = 0;
+static int g_contador_ciclos_descartados = 0;
+static int g_contador_ms_para_calculo = 0;
 
 void analise_desempenho_inicializar(void) {
-    g_velocidade_anterior_mmps = 0.0f;
+    g_velocidade_filtrada_anterior_mmps = 0.0f;
+    g_velocidade_filtrada_atual_mmps = 0.0f;
     g_max_aceleracao_mmps2 = 0.0f;
     g_max_desaceleracao_mmps2 = 0.0f;
-    g_aceleracao_estimada_mmps2 = 0.0f;
-    g_contador_ciclos = 0;
+    g_tick_anterior_calculo = HAL_GetTick();
+    g_contador_ciclos_descartados = 0;
+    g_contador_ms_para_calculo = 0;
 }
 
+// Esta função deve ser chamada a cada 1ms
 void analise_desempenho_atualizar(void) {
-    // Esta função roda a cada 1ms.
-    g_contador_ciclos++;
+    // 1. Obtém a velocidade instantânea (pode ser ruidosa)
+    float velocidade_instantanea_mmps = velocidade_obter_media_mmps();
 
-    // Aguardamos o intervalo definido para realizar o cálculo.
-    if (g_contador_ciclos < INTERVALO_CALCULO_ACELERACAO_MS) {
+    // 2. Aplica o filtro passa-baixa para suavizar a velocidade.
+    // Isso é feito a cada 1ms para manter o filtro atualizado.
+    g_velocidade_filtrada_atual_mmps = (FILTRO_VELOCIDADE_ALPHA * velocidade_instantanea_mmps) +
+                                       (1.0f - FILTRO_VELOCIDADE_ALPHA) * g_velocidade_filtrada_atual_mmps;
+
+    // 3. Incrementa o contador para controlar o intervalo de cálculo
+    g_contador_ms_para_calculo++;
+    if (g_contador_ms_para_calculo < INTERVALO_CALCULO_ACELERACAO_MS) {
+        // Ainda não é hora de calcular, apenas retorna.
         return;
     }
-    // Já se passaram 10ms, hora de calcular.
-    g_contador_ciclos = 0;
 
-    // 1. Obtém a velocidade atual (que já é uma média móvel de 10ms)
-    float velocidade_atual_mmps = velocidade_obter_media_mmps();
+    // --- Hora de calcular a aceleração (a cada INTERVALO_CALCULO_ACELERACAO_MS) ---
+    g_contador_ms_para_calculo = 0; // Reseta o contador
 
-    // 2. Calcula a variação da velocidade ao longo dos últimos 10ms
-    float delta_v = velocidade_atual_mmps - g_velocidade_anterior_mmps;
+    uint32_t tick_atual = HAL_GetTick();
+    uint32_t delta_ticks = tick_atual - g_tick_anterior_calculo;
 
-    // 3. Calcula a aceleração sobre esse intervalo de tempo
-    const float intervalo_s = (float)INTERVALO_CALCULO_ACELERACAO_MS / 1000.0f;
-    g_aceleracao_estimada_mmps2 = delta_v / intervalo_s;
-
-    // 4. Atualiza os valores máximos
-    if (g_aceleracao_estimada_mmps2 > g_max_aceleracao_mmps2) {
-        g_max_aceleracao_mmps2 = g_aceleracao_estimada_mmps2;
+    // Prevenção contra divisão por zero, embora improvável com o intervalo de 10ms.
+    if (delta_ticks == 0) {
+        return;
     }
-    if (g_aceleracao_estimada_mmps2 < 0 && fabsf(g_aceleracao_estimada_mmps2) > g_max_desaceleracao_mmps2) {
-        g_max_desaceleracao_mmps2 = fabsf(g_aceleracao_estimada_mmps2);
+    float delta_t_s = (float)delta_ticks / 1000.0f;
+
+    // 4. Calcula a aceleração usando a VELOCIDADE FILTRADA
+    float aceleracao_atual = (g_velocidade_filtrada_atual_mmps - g_velocidade_filtrada_anterior_mmps) / delta_t_s;
+
+    // --- LÓGICA DO PERÍODO DE GRAÇA (ignora os primeiros cálculos) ---
+    if (g_contador_ciclos_descartados < CALCS_DE_GRACA) {
+        g_contador_ciclos_descartados++;
+    } else {
+        // 5. Atualiza os valores máximos APENAS APÓS o período de graça
+        if (aceleracao_atual > g_max_aceleracao_mmps2) {
+            g_max_aceleracao_mmps2 = aceleracao_atual;
+        }
+
+        // Usa fabsf para obter o valor absoluto para comparação
+        if (aceleracao_atual < 0 && fabsf(aceleracao_atual) > g_max_desaceleracao_mmps2) {
+            g_max_desaceleracao_mmps2 = fabsf(aceleracao_atual);
+        }
     }
 
-    // 5. Salva a velocidade atual para ser a "anterior" no próximo cálculo
-    g_velocidade_anterior_mmps = velocidade_atual_mmps;
+    // 6. SEMPRE atualiza o estado para a próxima iteração.
+    g_velocidade_filtrada_anterior_mmps = g_velocidade_filtrada_atual_mmps;
+    g_tick_anterior_calculo = tick_atual;
 }
 
 float analise_desempenho_obter_max_desaceleracao(void) {
     return g_max_desaceleracao_mmps2;
 }
-float analise_desempenho_obter_max_aceleracao(void){
-	return g_max_aceleracao_mmps2;
-}
 
-float analise_desempenho_obter_aceleracao_instantanea(void){
-	// Retorna a última estimativa de aceleração calculada
-	return g_aceleracao_estimada_mmps2;
+float analise_desempenho_obter_max_aceleracao(void){
+    return g_max_aceleracao_mmps2;
 }
